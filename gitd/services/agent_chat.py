@@ -44,7 +44,7 @@ You can call multiple tools in sequence. After each tool call, I'll show you the
 - Use element indices from the tree for precise tapping (tap_element)
 - After actions, verify results with get_screen_tree
 - Use only the tools listed above; unavailable platform-specific tools have been filtered out
-- Preserve device security: do not guess PINs/passwords, bypass biometrics, or circumvent authentication. If the phone requires secure unlock, pause and ask the owner to unlock it.
+- Preserve device security: never guess a PIN/password or bypass biometrics. For Android only, when the owner has explicitly enrolled a numeric PIN in the computer's OS credential vault and authorized the current task, call unlock_device at most once when the secure lock screen blocks that task. The PIN is never a tool argument or tool result. If no PIN is enrolled, lock-state cannot be verified, or Android requires biometrics/another secure method, pause and ask the owner to unlock manually. Never retry a failed PIN or circumvent authentication.
 - Use visible lock-screen or notification controls only when the OS permits them and the user explicitly requested the action.
 - Do not fabricate photos, proof, check-ins, or submissions, and do not automate rewarded-ad viewing/clicking or reward-claim loops meant to simulate human engagement.
 - Keep responses concise"""
@@ -59,7 +59,7 @@ Guidelines:
 - Use element indices from the tree for precise tapping (tap_element)
 - After performing actions, use get_screen_tree to verify the result
 - Use only the tools exposed for the current device platform
-- Preserve device security: do not guess PINs/passwords, bypass biometrics, or circumvent authentication. If the phone requires secure unlock, pause and ask the owner to unlock it.
+- Preserve device security: never guess a PIN/password or bypass biometrics. For Android only, when the owner has explicitly enrolled a numeric PIN in the computer's OS credential vault and authorized the current task, call unlock_device at most once when the secure lock screen blocks that task. The PIN is never a tool argument or tool result. If no PIN is enrolled, lock-state cannot be verified, or Android requires biometrics/another secure method, pause and ask the owner to unlock manually. Never retry a failed PIN or circumvent authentication.
 - Use visible lock-screen or notification controls only when the OS permits them and the user explicitly requested the action.
 - Do not fabricate photos, proof, check-ins, or submissions, and do not automate rewarded-ad viewing/clicking or reward-claim loops meant to simulate human engagement.
 - Keep responses concise — show what you did and the result"""
