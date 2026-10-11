@@ -1,6 +1,7 @@
 """CLI entry point: android-agent skill install/list/update/remove/validate/search"""
 
 import argparse
+import getpass
 import json
 import logging
 import os
@@ -814,6 +815,65 @@ def cmd_login(args):
     return 1
 
 
+def cmd_unlock_pin(args):
+    """Manage a numeric Android PIN kept in the local OS credential vault."""
+    from gitd.bots.common.adb import Device
+    from gitd.services.device_unlock import has_stored_pin, remove_pin, store_pin
+
+    serial = (args.device or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", serial) or serial.startswith("ios:"):
+        print("A valid Android ADB device serial is required.", file=sys.stderr)
+        return 2
+
+    try:
+        if args.unlock_pin_action == "status":
+            print("PIN is enrolled in the OS credential vault." if has_stored_pin(serial) else "No PIN is enrolled for this device.")
+            return 0
+        if args.unlock_pin_action == "remove":
+            print("PIN removed from the OS credential vault." if remove_pin(serial) else "No PIN was enrolled for this device.")
+            return 0
+
+        # Enrollment is deliberately interactive so the secret never appears
+        # in shell history, process arguments, chat, or ordinary console echo.
+        if not sys.stdin.isatty():
+            print("PIN enrollment requires an interactive terminal.", file=sys.stderr)
+            return 2
+        try:
+            state = Device(serial).adb("get-state", timeout=5)
+        except Exception:
+            print("The device is not reachable through authorized ADB. Connect and authorize it first.", file=sys.stderr)
+            return 1
+        if state.strip().lower() != "device":
+            print("ADB does not report this device as ready.", file=sys.stderr)
+            return 1
+        print(
+            "This will save the numeric PIN for this device in the computer's OS credential vault. "
+            "The agent may use it only through the local unlock tool. Continue only for your own phone."
+        )
+        if input("Continue? [y/N]: ").strip().lower() not in ("y", "yes"):
+            print("Enrollment cancelled.")
+            return 0
+        try:
+            pin = getpass.getpass("Device PIN (4–16 digits, hidden): ")
+            confirmation = getpass.getpass("Confirm device PIN (hidden): ")
+        except (EOFError, KeyboardInterrupt):
+            print("\nEnrollment cancelled.", file=sys.stderr)
+            return 1
+        if pin != confirmation:
+            print("PIN entries did not match; nothing was saved.", file=sys.stderr)
+            return 1
+        try:
+            store_pin(serial, pin)
+        except (ValueError, RuntimeError) as exc:
+            print(f"Could not enroll PIN: {exc}", file=sys.stderr)
+            return 1
+        print("PIN enrolled in the OS credential vault. It is not available to the model as text.")
+        return 0
+    except (ValueError, RuntimeError) as exc:
+        print(f"Secure credential operation failed: {exc}", file=sys.stderr)
+        return 1
+
+
 def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -874,6 +934,17 @@ def main(argv=None):
     login_p = sub.add_parser("login", help="Sign in via your Claude subscription (no API key needed)")
     login_p.add_argument("--relogin", action="store_true", help="Force re-authentication even if already signed in")
 
+    # ── unlock-pin subcommand — local Android credential enrollment ──
+    unlock_pin_p = sub.add_parser("unlock-pin", help="Enroll, inspect, or remove an Android PIN in the OS credential vault")
+    unlock_pin_sub = unlock_pin_p.add_subparsers(dest="unlock_pin_action", required=True)
+    for action, help_text in (
+        ("set", "Securely enroll a numeric PIN for one connected Android device"),
+        ("status", "Check whether a PIN is enrolled without revealing it"),
+        ("remove", "Remove the PIN from the OS credential vault"),
+    ):
+        action_p = unlock_pin_sub.add_parser(action, help=help_text)
+        action_p.add_argument("device", help="Connected Android ADB serial (not a phone/account password)")
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -888,6 +959,9 @@ def main(argv=None):
 
     if args.command == "doctor":
         return cmd_doctor(args)
+
+    if args.command == "unlock-pin":
+        return cmd_unlock_pin(args)
 
     if args.command == "skill":
         if args.skill_command is None:
