@@ -16,13 +16,13 @@ def _fake_keyring(monkeypatch, pin="1234", backend_module="keyring.backends.Wind
     Backend.__module__ = backend_module
     module = types.ModuleType("keyring")
     module.get_keyring = lambda: Backend()
-    module.set_password = lambda service, user, value: values.__setitem__((service, user), value)
-    module.get_password = lambda service, user: values.get((service, user))
+    setattr(module, "set_password", lambda service, user, value: values.__setitem__((service, user), value))
+    setattr(module, "get_password", lambda service, user: values.get((service, user)))
 
     def delete_password(service, user):
         del values[(service, user)]
 
-    module.delete_password = delete_password
+    setattr(module, "delete_password", delete_password)
     monkeypatch.setitem(sys.modules, "keyring", module)
     return values
 
