@@ -4,6 +4,7 @@ The PIN never enters an LLM tool argument, chat, application log, or shell comma
 line. This only sends digit key events through an already-authorized ADB connection;
 it does not bypass Android's lock-screen authentication.
 """
+
 from __future__ import annotations
 
 import re
@@ -61,14 +62,8 @@ def _keyring_module():
     except Exception as exc:
         raise RuntimeError("The OS credential vault could not be initialized.") from exc
 
-    allowed = any(
-        module_name == prefix or module_name.startswith(prefix + ".")
-        for prefix in _ALLOWED_BACKEND_PREFIXES
-    )
-    rejected_name = any(
-        word in module_name or word in class_name
-        for word in ("plaintext", "null", "fail", "keyrings.alt")
-    )
+    allowed = any(module_name == prefix or module_name.startswith(prefix + ".") for prefix in _ALLOWED_BACKEND_PREFIXES)
+    rejected_name = any(word in module_name or word in class_name for word in ("plaintext", "null", "fail", "keyrings.alt"))
     if not allowed or rejected_name or priority <= 0:
         raise RuntimeError(
             "No supported secure OS credential vault is active. Configure Windows Credential Manager, "
