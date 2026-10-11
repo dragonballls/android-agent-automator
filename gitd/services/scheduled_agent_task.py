@@ -53,6 +53,7 @@ def build_execution_prompt(prompt: str) -> str:
         f"{task}"
     )
 
+
 def run_payload(encoded: str) -> int:
     """Execute one task and stream only user-facing output/tool names to stdout."""
     try:
