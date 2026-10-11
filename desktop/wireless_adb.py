@@ -104,3 +104,92 @@ def pair_and_connect(
         f"Wireless ADB connected to {connect_endpoint}. Use Refresh Connected Phones to see it in Target phones. "
         "The pairing code was not saved."
     )
+
+
+
+def _normalise_discovered_endpoint(value: str) -> str | None:
+    """Validate an endpoint emitted by ADB's mDNS service discovery."""
+    raw = str(value).strip()
+    if raw.startswith("["):
+        close = raw.find("]")
+        if close < 0 or raw[close + 1:close + 2] != ":":
+            return None
+        host, port = raw[1:close], raw[close + 2:]
+    else:
+        host, separator, port = raw.rpartition(":")
+        if not separator:
+            return None
+    try:
+        return _endpoint(host, port, "Discovered ADB endpoint")
+    except WirelessAdbError:
+        return None
+
+
+def reconnect_paired_devices(
+    *, adb_path: str | None = None, runner: Callable[..., subprocess.CompletedProcess] | None = None
+) -> list[str]:
+    """Reconnect previously authorized Android wireless devices advertised by ADB mDNS.
+
+    This never pairs a new device or uses a pairing code. Android must already trust
+    this computer, Wireless debugging must be enabled, and the devices must be
+    discoverable on the current local network.
+    """
+    executable = adb_path or shutil.which("adb")
+    if not executable:
+        raise WirelessAdbError(
+            "ADB was not found. Install Android SDK Platform-Tools and make sure adb is available on PATH."
+        )
+    invoke = runner or subprocess.run
+    options = {"capture_output": True, "text": True, "timeout": 10}
+    if os.name == "nt":
+        options["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+    try:
+        discovered = invoke([executable, "mdns", "services"], **options)
+    except subprocess.TimeoutExpired as exc:
+        raise WirelessAdbError("ADB wireless-device discovery timed out.") from exc
+    except OSError as exc:
+        raise WirelessAdbError("Could not start ADB for wireless-device discovery.") from exc
+    if discovered.returncode != 0:
+        raise WirelessAdbError("ADB could not discover wireless devices. Check the Platform-Tools installation.")
+
+    endpoints: list[str] = []
+    for line in (discovered.stdout or "").splitlines():
+        fields = line.split()
+        if len(fields) < 3 or "_adb-tls-connect._tcp" not in fields:
+            continue
+        endpoint = _normalise_discovered_endpoint(fields[-1])
+        if endpoint and endpoint not in endpoints:
+            endpoints.append(endpoint)
+    if not endpoints:
+        return []
+
+    # Avoid reconnecting endpoints that ADB already reports as connected.
+    active: set[str] = set()
+    try:
+        listed = invoke([executable, "devices"], **options)
+        if listed.returncode == 0:
+            for line in (listed.stdout or "").splitlines():
+                fields = line.split()
+                if len(fields) >= 2 and fields[1] == "device":
+                    normalised = _normalise_discovered_endpoint(fields[0])
+                    if normalised:
+                        active.add(normalised)
+    except (OSError, subprocess.TimeoutExpired):
+        # Discovery can still make progress if the optional active-list check fails.
+        pass
+
+    newly_connected: list[str] = []
+    for endpoint in endpoints:
+        if endpoint in active:
+            continue
+        try:
+            result = invoke([executable, "connect", endpoint], **options)
+        except subprocess.TimeoutExpired:
+            continue
+        except OSError:
+            continue
+        output = ((result.stdout or "") + "\\n" + (result.stderr or "")).lower()
+        if result.returncode == 0 and "failed to connect" not in output and "unable to connect" not in output:
+            newly_connected.append(endpoint)
+    return newly_connected
