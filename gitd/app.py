@@ -8,8 +8,9 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from gitd.models.base import Base, engine
 from gitd.routers.agent_chat import router as agent_chat_router
@@ -157,9 +158,6 @@ def create_app() -> FastAPI:
     # Serve the compiled Vue dashboard from the same localhost origin in the
     # packaged Windows launcher. API routes above take precedence; unknown
     # non-API paths fall back to index.html for client-side routing.
-    from fastapi.responses import FileResponse
-    from fastapi import HTTPException
-
     bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
     frontend_dist = bundle_root / "frontend" / "dist"
     if frontend_dist.is_dir() and (frontend_dist / "index.html").is_file():
