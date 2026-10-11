@@ -162,10 +162,6 @@ def create_app() -> FastAPI:
     frontend_dist = bundle_root / "frontend" / "dist"
     if frontend_dist.is_dir() and (frontend_dist / "index.html").is_file():
 
-        @app.get("/", include_in_schema=False)
-        def frontend_index():
-            return FileResponse(frontend_dist / "index.html")
-
         @app.get("/{full_path:path}", include_in_schema=False)
         def frontend_spa(full_path: str):
             requested = (frontend_dist / full_path).resolve()
