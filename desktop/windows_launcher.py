@@ -203,6 +203,7 @@ class Launcher:
         self.startup_enabled = tk.BooleanVar(value=self._is_startup_enabled())
         self.status_var = tk.StringVar(value="Service not checked")
         self.available_devices: list[str] = []
+        self._device_selection_initialized = False
         self.task_name_var = tk.StringVar(value="")
         self.daily_time_var = tk.StringVar(value="09:00")
         self.provider_var = tk.StringVar(value="gemini")
@@ -511,14 +512,17 @@ class Launcher:
             previous_selection = {
                 self.device_listbox.get(index) for index in self.device_listbox.curselection()
             }
+            first_device_list = not self._device_selection_initialized
             self.available_devices = serials
             self.device_listbox.delete(0, tk.END)
             for index, serial in enumerate(serials):
                 self.device_listbox.insert(tk.END, serial)
                 if serial in previous_selection:
                     self.device_listbox.selection_set(index)
-            if not self.device_listbox.curselection() and serials:
+            if first_device_list and serials and not self.device_listbox.curselection():
                 self.device_listbox.selection_set(0)
+            if serials:
+                self._device_selection_initialized = True
         except Exception:
             pass
 
@@ -533,6 +537,7 @@ class Launcher:
             schedules = self._load_schedules()
         except Exception:
             return
+        previous_selection = set(self.tree.selection())
         for item in self.tree.get_children():
             self.tree.delete(item)
         for row in schedules:
@@ -540,10 +545,11 @@ class Launcher:
                 continue
             times = _daily_times(row.get("daily_times"))
             status = "Enabled" if row.get("is_enabled") else "Paused"
+            item_id = str(row["id"])
             self.tree.insert(
                 "",
                 "end",
-                iid=str(row["id"]),
+                iid=item_id,
                 values=(
                     row.get("name") or "Saved task",
                     row.get("phone_serial") or "—",
@@ -552,6 +558,8 @@ class Launcher:
                     row.get("next_run") or "—",
                 ),
             )
+            if item_id in previous_selection:
+                self.tree.selection_add(item_id)
 
     def save_task(self):
         prompt = self.prompt_text.get("1.0", "end").strip()
