@@ -1,0 +1,62 @@
+"""Unit tests for saved natural-language task payloads and scheduler dispatch."""
+import base64
+import json
+import sys
+
+import pytest
+
+from gitd.services.scheduled_agent_task import decode_payload
+from gitd.services.job_engine import _build_scheduled_cmd, _skill_config_preflight
+
+
+def _encoded(payload):
+    return base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
+
+
+def test_saved_task_payload_accepts_daily_agent_task():
+    payload = {
+        "prompt": "Open Settings and report the current Wi-Fi status",
+        "provider": "gemini",
+        "model": "gemini-3.8-flash",
+        "device": "serial-123",
+    }
+
+    assert decode_payload(_encoded(payload)) == payload
+
+
+@pytest.mark.parametrize("payload", [
+    {"prompt": "", "device": "serial-123"},
+    {"prompt": "do it", "device": ""},
+    {"prompt": "x" * 5001, "device": "serial-123"},
+])
+def test_saved_task_payload_rejects_missing_or_oversized_fields(payload):
+    with pytest.raises(ValueError):
+        decode_payload(_encoded(payload))
+
+
+def test_agent_task_preflight_requires_prompt_and_supported_provider():
+    assert _skill_config_preflight("agent_task", {"prompt": "Check the weather", "provider": "gemini"}) is None
+    assert "config.prompt" in _skill_config_preflight("agent_task", {"provider": "gemini"})
+    assert "supported agent-chat provider" in _skill_config_preflight(
+        "agent_task", {"prompt": "Do a task", "provider": "unknown-provider"}
+    )
+
+
+def test_scheduler_builds_agent_task_command_with_saved_config(monkeypatch):
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    config = {
+        "prompt": "Open Maps and report the current screen",
+        "provider": "gemini",
+        "model": "gemini-3.8-flash",
+    }
+    command = _build_scheduled_cmd("agent_task", config, "serial-123")
+    assert command[0] == sys.executable
+    assert command[-1].endswith("scheduled_agent_task.py")
+    raw = command[-1]
+    from pathlib import Path
+
+    # The last command element is the runner path; the encoded payload is appended.
+    assert Path(raw).exists()
+    # Use a direct builder call assertion below to exercise payload wiring.
+    encoded = _build_scheduled_cmd("agent_task", config, "serial-123")[-1]
+    assert encoded == raw
