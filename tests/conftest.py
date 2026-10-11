@@ -52,13 +52,21 @@ def _verify_db_isolated():
     from gitd.models.base import engine
 
     engine_url = str(engine.url)
+    engine_database = Path(engine.url.database or "").resolve()
     db_path = os.environ.get("DB_PATH", "")
+    expected_database = Path(db_path).resolve() if db_path else None
     real_db = "data/gitd.db"  # the production default in gitd/config.py
-    assert db_path and db_path in engine_url and real_db not in engine_url, (
-        f"Test DB isolation failed: engine is bound to {engine_url!r} (DB_PATH="
-        f"{db_path!r}), expected a throwaway temp DB and definitely NOT {real_db}. "
+    normalized_engine_path = str(engine_database).replace("\\", "/")
+    assert (
+        db_path
+        and expected_database == engine_database
+        and real_db not in normalized_engine_path
+    ), (
+        f"Test DB isolation failed: engine is bound to {engine_url!r} "
+        f"(resolved DB={str(engine_database)!r}, DB_PATH={db_path!r}), "
+        f"expected the same throwaway temp DB and definitely NOT {real_db}. "
         "Something imported gitd before conftest set DB_PATH — do NOT run this "
-        "suite, it would touch the real dev DB."
+        "suite, it could touch the real dev DB."
     )
     yield
 
