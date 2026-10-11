@@ -7,7 +7,7 @@ The GitHub Actions workflow builds a single-file `GhostLauncher.exe` and publish
 1. Download the **GhostLauncher-Windows-x64** ZIP artifact from a successful [Windows launcher EXE workflow run](https://github.com/dragonballls/android-agent-automator/actions/workflows/windows-launcher.yml?query=branch%3Amain). Open the run's **Artifacts** section and download the ZIP.
 2. Extract the ZIP to a normal folder you control, then start `GhostLauncher.exe` from that extracted folder. Do not run it from inside the ZIP preview.
 3. Start at the **1 Connect phone** tab. Click **Start service and find phones**; the launcher starts its local service and refreshes the device list.
-4. Click **Configure Gemini Key** and enter your Google AI Studio key. The input is masked and the key is stored in the Windows OS credential vault, not a plaintext settings file. After saving a new key, click **Restart Service** so the running background service loads it.
+4. Open **Settings → Configure Gemini API key** and enter your Google AI Studio key. The input is masked and the key is stored in the Windows OS credential vault, not a plaintext settings file. After saving a new key, use **Settings → Restart Service** so the running background service loads it.
 5. Install the latest Android SDK Platform-Tools from the [official download page](https://developer.android.com/tools/releases/platform-tools) and make sure `adb` is available on PATH. Choose either:
    - **Wireless:** On Android 11 or later, enable Developer options → **Wireless debugging**. Keep the phone and PC on the same trusted Wi-Fi network, click **Pair over Wi-Fi** in the launcher, and follow its instructions. Android displays a temporary pairing port/code and a separate wireless-debugging connection port; enter the matching values from the phone. The code is used for that attempt only and is not stored or logged.
    - **USB:** Enable Developer options → **USB debugging**, connect a data-capable USB cable, unlock the phone, then approve the computer's USB-debugging prompt on the phone.
@@ -23,13 +23,13 @@ After a phone has been paired successfully over Wi-Fi, keep Android **Wireless d
 
 Run this on **one phone first**, before creating multi-phone schedules:
 
-1. Confirm exactly one intended phone is shown and selected under **Target phones**.
+1. In **1 Connect phone**, confirm exactly one intended phone is shown and selected. Use **Clear** and then select the intended phone if necessary.
 2. Put the phone on a harmless, non-sensitive screen. Avoid banking, payment, health, private-message, password, or account-security screens.
 3. Set the task name to `Read-only device check` and use this exact task instruction:
 
    > Read only the screen context already supplied to you. Report the connected device identifier, the foreground app if visible, and the visible page title or general status. Do not tap, swipe, type, navigate, launch or close apps, unlock the phone, change settings, claim rewards, purchase, send, post, or delete anything. Do not call device-action tools. If the supplied context does not show the foreground app or screen, say that explicitly; do not try to obtain it by interacting with the phone.
 
-4. Save the task with a daily time well outside the time you expect to be testing, select its row in **Saved daily tasks**, and click **Run Now**. Saving creates an enabled recurring daily schedule; **after the run finishes, delete this temporary task** so it cannot run again tomorrow.
+4. Open **2 Create task**, save the test with a daily time well outside the time you expect to be testing, then open **3 Saved tasks**, select the row, and click **Run Now**. Saving creates an enabled recurring daily schedule; **after the run finishes, delete this temporary task** so it cannot run again tomorrow.
 5. Check its reported result and task/session logs. A useful pass means the report identifies the foreground app or explicitly states that the needed screen context was unavailable, and the phone was not interacted with. If it reports missing context, check the connection/device list before trying again.
 
 A successful read-only check validates only that particular device, connection, and run. It does not prove that arbitrary apps or workflows will work. After one phone passes, the next step is a harmless two-phone check using the same read-only instruction, with each phone selected and reported independently.
