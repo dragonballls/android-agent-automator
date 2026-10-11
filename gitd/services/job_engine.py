@@ -326,9 +326,6 @@ def _skill_config_preflight(job_type: str, config: dict) -> str | None:
         provider = str((config or {}).get("provider") or "gemini").strip()
         if provider not in {"claude-code", "anthropic", "openrouter", "gemini", "vllm", "ollama", "on-device"}:
             return "agent_task config.provider is not a supported agent-chat provider"
-        if phone := (config or {}).get("device"):
-            if not str(phone).strip():
-                return "agent_task config.device must be a non-empty device ref"
         return None
     if job_type not in ("skill_workflow", "skill_action"):
         return None
