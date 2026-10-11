@@ -43,7 +43,7 @@ jobs:
         run: python -m compileall -q gitd desktop
 
       - name: Run launcher and task regression tests
-        run: python -m pytest tests/test_agent_chat_gemini.py tests/test_device_unlock.py tests/test_scheduled_agent_task.py -v --tb=short
+        run: python -m pytest tests/test_agent_chat_gemini.py tests/test_device_unlock.py tests/test_scheduled_agent_task.py tests/test_wireless_adb.py -v --tb=short
 
       - name: Package single-file Windows launcher
         shell: pwsh
