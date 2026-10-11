@@ -31,6 +31,28 @@ def decode_payload(encoded: str) -> dict[str, Any]:
     return value
 
 
+def build_execution_prompt(prompt: str) -> str:
+    """Wrap a saved task with a verified, bounded repeat-until-complete contract."""
+    task = prompt.strip()
+    return (
+        "AUTOMATION EXECUTION CONTRACT\\n"
+        "- Complete the user's objective end to end; do not stop after merely attempting the first action.\\n"
+        "- For ordered or multi-part instructions, finish and verify each stage before moving to the next stage.\\n"
+        "- If a task explicitly requires repetition, repeat the authorized action while the observed screen shows "
+        "the goal is still incomplete. Re-read the screen/UI tree after each cycle, stop repeating as soon as "
+        "completion is verified, and then continue with the next stage.\\n"
+        "- Do not assume success. Use visible screen evidence or a reliable tool result to verify completion.\\n"
+        "- Prevent endless loops: after three consecutive cycles with no measurable progress, try one materially "
+        "different safe approach; if that also makes no progress after two more cycles, stop and report the blocker.\\n"
+        "- Do not repeat purchases, payments, public posts, messages, deletion, or other consequential actions "
+        "without the required explicit authorization. Never fabricate steps/proof or bypass device security. "
+        "Do not automate rewarded-ad viewing/clicking or reward-claim loops intended to simulate human engagement.\\n"
+        "- At the end, report which stages were completed, what was verified, and any blocker. Never label an "
+        "unfinished task complete.\\n\\n"
+        "USER'S TASK\\n"
+        f"{task}"
+    )
+
 def run_payload(encoded: str) -> int:
     """Execute one task and stream only user-facing output/tool names to stdout."""
     try:
@@ -51,8 +73,9 @@ def run_payload(encoded: str) -> int:
         session.auto_screenshot = True
         print(f"[saved-task] starting device={device} provider={session.provider} model={session.model}", flush=True)
         exit_code = 0
+        execution_prompt = build_execution_prompt(prompt)
         try:
-            for event in chat_turn(session, prompt):
+            for event in chat_turn(session, execution_prompt):
                 event_type = str(event.get("type") or "")
                 if event_type == "text":
                     chunk = event.get("content") or event.get("text") or ""
