@@ -128,7 +128,7 @@ def test_auto_reconnect_only_uses_paired_tls_connect_services_and_skips_active_d
                     "adb-bad _adb-tls-connect._tcp. not-an-ip:41231\n"
                 )
             ),
-            _completed(stdout="List of devices attached\n192.168.1.24:38555 device product:phone\n"),
+            _completed(stdout="List of devices attached\nadb-one._adb-tls-connect._tcp device product:phone\n"),
             _completed(stdout="connected to 192.168.1.25:41231"),
         ]
     )
