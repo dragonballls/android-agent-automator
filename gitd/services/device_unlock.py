@@ -7,6 +7,7 @@ it does not bypass Android's lock-screen authentication.
 from __future__ import annotations
 
 import re
+import threading
 import time
 
 _SERVICE_NAME = "ghost-in-the-droid/android-device-pin"
@@ -20,8 +21,8 @@ _ALLOWED_BACKEND_PREFIXES = (
 )
 _MIN_PIN_LENGTH = 4
 _MAX_PIN_LENGTH = 16
-_RETRY_COOLDOWN_SECONDS = 30.0
-_last_attempt_at: dict[str, float] = {}
+_pin_attempt_blocked: set[str] = set()
+_unlock_guard = threading.Lock()
 
 
 def _validate_serial(serial: str) -> str:
@@ -72,6 +73,7 @@ def store_pin(serial: str, pin: str) -> None:
     keyring = _keyring_module()
     try:
         keyring.set_password(_SERVICE_NAME, serial, pin)
+        _pin_attempt_blocked.discard(serial)
     except Exception as exc:
         raise RuntimeError("The OS credential vault could not save the PIN.") from exc
 
@@ -95,6 +97,7 @@ def remove_pin(serial: str) -> bool:
         if not existing:
             return False
         keyring.delete_password(_SERVICE_NAME, serial)
+        _pin_attempt_blocked.discard(serial)
         return True
     except Exception as exc:
         raise RuntimeError("The OS credential vault could not remove the device entry.") from exc
@@ -134,6 +137,16 @@ def _screen_size(dev) -> tuple[int, int]:
 
 
 def unlock_device(device: str) -> str:
+    """Serialize unlock attempts so concurrent model tool calls cannot double-enter a PIN."""
+    if not _unlock_guard.acquire(blocking=False):
+        return "ERROR: An unlock operation is already running. Wait for its result before requesting another."
+    try:
+        return _unlock_device_once(device)
+    finally:
+        _unlock_guard.release()
+
+
+def _unlock_device_once(device: str) -> str:
     """Use an enrolled local PIN for a single Android unlock attempt, then verify."""
     try:
         serial = _validate_serial(device)
@@ -145,6 +158,9 @@ def unlock_device(device: str) -> str:
 
     dev = Device(serial)
     try:
+        # Wake first so an asleep phone exposes its actual keyguard state.
+        dev.adb("shell", "input", "keyevent", "KEYCODE_WAKEUP", timeout=5)
+        time.sleep(0.2)
         locked = _read_keyguard_state(dev)
     except Exception:
         locked = None
@@ -154,6 +170,12 @@ def unlock_device(device: str) -> str:
         return (
             "ERROR: Could not reliably detect this device's lock state. No PIN was entered. "
             "Check the authorized ADB connection and try again."
+        )
+    if serial in _pin_attempt_blocked:
+        return (
+            "ERROR: A previous PIN attempt for this device did not verify. No new attempt will be made. "
+            "After checking the PIN, re-enroll it locally with `ghost unlock-pin set <device-serial>` "
+            "to explicitly authorize another attempt."
         )
 
     try:
@@ -168,15 +190,7 @@ def unlock_device(device: str) -> str:
     except Exception as exc:
         return f"ERROR: Secure PIN access failed: {exc}"
 
-    now = time.monotonic()
-    last_attempt = _last_attempt_at.get(serial)
-    if last_attempt is not None and now - last_attempt < _RETRY_COOLDOWN_SECONDS:
-        remaining = max(1, int(_RETRY_COOLDOWN_SECONDS - (now - last_attempt)))
-        return f"ERROR: An unlock attempt was already made recently. Wait {remaining}s before another attempt."
-
-    _last_attempt_at[serial] = now
     try:
-        dev.adb("shell", "input", "keyevent", "KEYCODE_WAKEUP", timeout=5)
         width, height = _screen_size(dev)
         center_x = width // 2
         dev.adb(
@@ -186,6 +200,9 @@ def unlock_device(device: str) -> str:
             timeout=5,
         )
         time.sleep(0.4)
+        # Latch the device before entering any digits. A failed or uncertain
+        # attempt requires explicit local re-enrollment before another attempt.
+        _pin_attempt_blocked.add(serial)
         # Send each digit as a separate key event: never place the PIN in an
         # ADB command argument, log line, agent message, or tool result.
         for digit in pin:
@@ -200,6 +217,7 @@ def unlock_device(device: str) -> str:
 
     locked_after = _read_keyguard_state(dev)
     if locked_after is False:
+        _pin_attempt_blocked.discard(serial)
         return "Unlocked successfully and verified through Android's reported lock state."
     if locked_after is True:
         return (
