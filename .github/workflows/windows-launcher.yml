@@ -1,0 +1,76 @@
+name: Windows launcher EXE
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install Python dependencies and packager
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]" pyinstaller
+
+      - name: Build dashboard frontend
+        working-directory: frontend
+        run: |
+          npm install --no-audit
+          npm run build-only
+
+      - name: Compile Python source
+        run: python -m compileall -q gitd desktop
+
+      - name: Run launcher and task regression tests
+        run: python -m pytest tests/test_agent_chat_gemini.py tests/test_device_unlock.py tests/test_scheduled_agent_task.py -v --tb=short
+
+      - name: Package single-file Windows launcher
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name GhostLauncher --collect-all keyring --collect-all uvicorn --collect-submodules gitd --add-data "frontend\dist;frontend\dist" --add-data "gitd;gitd" desktop\windows_launcher.py
+          if (!(Test-Path "dist\GhostLauncher.exe")) {
+            throw "PyInstaller did not produce dist\GhostLauncher.exe"
+          }
+
+      - name: Verify the packaged executable
+        shell: pwsh
+        run: |
+          & ".\dist\GhostLauncher.exe" --self-test
+          if ($LASTEXITCODE -ne 0) {
+            $log = Join-Path $env:LOCALAPPDATA "GhostInTheDroid\logs\self-test.txt"
+            if (Test-Path $log) { Get-Content $log }
+            throw "Packaged GhostLauncher self-test failed with exit code $LASTEXITCODE"
+          }
+          $file = Get-Item ".\dist\GhostLauncher.exe"
+          Write-Host "Verified EXE: $($file.Length) bytes"
+
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhostLauncher-Windows-x64
+          path: dist/GhostLauncher.exe
+          if-no-files-found: error
+          retention-days: 14
