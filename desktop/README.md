@@ -11,7 +11,7 @@ The GitHub Actions workflow builds a single-file `GhostLauncher.exe` and publish
 5. Install the latest Android SDK Platform-Tools from the [official download page](https://developer.android.com/tools/releases/platform-tools) and make sure `adb` is available on PATH. Choose either:
    - **Wireless:** On Android 11 or later, enable Developer options → **Wireless debugging**. Keep the phone and PC on the same trusted Wi-Fi network, click **Pair over Wi-Fi** in the launcher, and follow its instructions. Android displays a temporary pairing port/code and a separate wireless-debugging connection port; enter the matching values from the phone. The code is used for that attempt only and is not stored or logged.
    - **USB:** Enable Developer options → **USB debugging**, connect a data-capable USB cable, unlock the phone, then approve the computer's USB-debugging prompt on the phone.
-6. Click **Refresh Connected Phones**. The device must appear in **Target phones** before you can save a task. If it does not, see [Troubleshooting](TROUBLESHOOTING.md#adb-connection-issues).
+6. Click **Refresh Connected Phones**. The device must appear in **Target phones** before you can save a task. If it does not, see [Troubleshooting](../docs/TROUBLESHOOTING.md#adb-connection-issues).
 7. Before using Gemini, read the privacy note below. For the first test, put the phone on a non-sensitive screen such as the home screen.
 8. For a normal saved task, enter an instruction, provider/model, and daily time. In **Target phones**, select one phone or Ctrl/Shift-select multiple connected phones, then click **Save Daily Task**. This creates one enabled daily schedule per selected phone.
 
