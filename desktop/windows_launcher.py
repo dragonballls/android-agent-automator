@@ -733,7 +733,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         except Exception as exc:
-            (LOG_DIR / "self-test.txt").write_text(f"launcher import failed: {type(exc).__name__}\n", encoding="utf-8")
+            missing_module = getattr(exc, "name", None)
+            detail = f": {missing_module}" if missing_module else ""
+            message = f"launcher import failed: {type(exc).__name__}{detail}\\n"
+            (LOG_DIR / "self-test.txt").write_text(message, encoding="utf-8")
             return 2
     root = tk.Tk()
     Launcher(root)
