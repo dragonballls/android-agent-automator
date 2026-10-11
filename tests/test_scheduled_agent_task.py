@@ -5,9 +5,9 @@ import sys
 
 import pytest
 
-from gitd.services.scheduled_agent_task import build_execution_prompt, decode_payload
-from gitd.services.multi_device_tasks import build_device_schedule_payloads
 from gitd.services.job_engine import _build_scheduled_cmd, _skill_config_preflight
+from gitd.services.multi_device_tasks import build_device_schedule_payloads
+from gitd.services.scheduled_agent_task import build_execution_prompt, decode_payload
 
 
 def _encoded(payload):
@@ -72,6 +72,7 @@ def test_saved_task_prompt_repeats_until_verified_completion_then_advances():
     assert "three consecutive cycles with no measurable progress" in prompt
     assert "Do not automate rewarded-ad viewing/clicking" in prompt
     assert "Repeat the safe setup steps until complete, then open the next page." in prompt
+
 
 def test_multi_device_schedules_create_one_identical_daily_task_per_phone():
     payloads = build_device_schedule_payloads(
