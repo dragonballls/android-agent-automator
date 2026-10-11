@@ -430,11 +430,16 @@ def _launch_scheduled_job(db, job_row: dict):
 
     log_path = scheduled_job_log_path(job_id)
     log_f = open(log_path, "w", buffering=1)
+    job_env = os.environ.copy()
+    # Windowed PyInstaller children can have sys.stdout=None; pass the same
+    # scheduler log path so their internal runner can explicitly append to it.
+    job_env["GHOST_SCHEDULE_LOG_FILE"] = log_path
     proc = subprocess.Popen(
         cmd,
         stdout=log_f,
         stderr=subprocess.STDOUT,
         cwd=str(_SCRIPT_DIR),
+        env=job_env,
     )
     db.execute(
         text(
