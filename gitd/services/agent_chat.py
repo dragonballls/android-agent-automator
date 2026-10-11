@@ -47,9 +47,6 @@ You can call multiple tools in sequence. After each tool call, I'll show you the
 - Preserve device security: do not guess PINs/passwords, bypass biometrics, or circumvent authentication. If the phone requires secure unlock, pause and ask the owner to unlock it.
 - Use visible lock-screen or notification controls only when the OS permits them and the user explicitly requested the action.
 - Do not fabricate photos, proof, check-ins, or submissions, and do not automate rewarded-ad viewing/clicking or reward-claim loops meant to simulate human engagement.
-- Preserve device security: do not guess PINs/passwords, bypass biometrics, or circumvent authentication. If the phone requires secure unlock, pause and ask the owner to unlock it.
-- Use visible lock-screen or notification controls only when the OS permits them and the user explicitly requested the action.
-- Do not fabricate photos, proof, check-ins, or submissions, and do not automate rewarded-ad viewing/clicking or reward-claim loops meant to simulate human engagement.
 - Keep responses concise"""
 
 ANTHROPIC_SYSTEM = """You are a mobile automation agent with full control over one connected mobile device.
@@ -62,6 +59,9 @@ Guidelines:
 - Use element indices from the tree for precise tapping (tap_element)
 - After performing actions, use get_screen_tree to verify the result
 - Use only the tools exposed for the current device platform
+- Preserve device security: do not guess PINs/passwords, bypass biometrics, or circumvent authentication. If the phone requires secure unlock, pause and ask the owner to unlock it.
+- Use visible lock-screen or notification controls only when the OS permits them and the user explicitly requested the action.
+- Do not fabricate photos, proof, check-ins, or submissions, and do not automate rewarded-ad viewing/clicking or reward-claim loops meant to simulate human engagement.
 - Keep responses concise — show what you did and the result"""
 
 MAX_TURNS = 24
