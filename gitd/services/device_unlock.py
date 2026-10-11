@@ -33,7 +33,12 @@ def _validate_serial(serial: str) -> str:
 
 
 def _validate_pin(pin: str) -> str:
-    if not isinstance(pin, str) or not re.fullmatch(r"\d{4,16}", pin):
+    if (
+        not isinstance(pin, str)
+        or not pin.isascii()
+        or not pin.isdigit()
+        or not (_MIN_PIN_LENGTH <= len(pin) <= _MAX_PIN_LENGTH)
+    ):
         raise ValueError("Only numeric Android PINs of 4–16 digits are supported.")
     return pin
 
@@ -194,9 +199,14 @@ def _unlock_device_once(device: str) -> str:
         width, height = _screen_size(dev)
         center_x = width // 2
         dev.adb(
-            "shell", "input", "swipe",
-            str(center_x), str(int(height * 0.82)),
-            str(center_x), str(int(height * 0.24)), "300",
+            "shell",
+            "input",
+            "swipe",
+            str(center_x),
+            str(int(height * 0.82)),
+            str(center_x),
+            str(int(height * 0.24)),
+            "300",
             timeout=5,
         )
         time.sleep(0.4)
