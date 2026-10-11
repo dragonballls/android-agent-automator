@@ -154,34 +154,44 @@ def reconnect_paired_devices(
         raise WirelessAdbError("ADB could not discover wireless devices. Check the Platform-Tools installation.")
 
     endpoints: list[str] = []
+    service_names: dict[str, set[str]] = {}
     for line in (discovered.stdout or "").splitlines():
         fields = line.split()
         if len(fields) < 3 or not any("_adb-tls-connect._tcp" in field for field in fields[:-1]):
             continue
         endpoint = _normalise_discovered_endpoint(fields[-1])
-        if endpoint and endpoint not in endpoints:
-            endpoints.append(endpoint)
+        if endpoint:
+            service_names.setdefault(endpoint, set()).add(fields[0])
+            if endpoint not in endpoints:
+                endpoints.append(endpoint)
     if not endpoints:
         return []
 
-    # Avoid reconnecting endpoints that ADB already reports as connected.
-    active: set[str] = set()
+    # ADB may list a connected Wi-Fi transport either as IP:port or as the
+    # mDNS instance plus service type, depending on the Platform-Tools version.
+    active_endpoints: set[str] = set()
+    active_serials: set[str] = set()
     try:
         listed = invoke([executable, "devices"], **options)
         if listed.returncode == 0:
             for line in (listed.stdout or "").splitlines():
                 fields = line.split()
                 if len(fields) >= 2 and fields[1] == "device":
+                    active_serials.add(fields[0])
                     normalised = _normalise_discovered_endpoint(fields[0])
                     if normalised:
-                        active.add(normalised)
+                        active_endpoints.add(normalised)
     except (OSError, subprocess.TimeoutExpired):
         # Discovery can still make progress if the optional active-list check fails.
         pass
 
     newly_connected: list[str] = []
     for endpoint in endpoints:
-        if endpoint in active:
+        active_service_names = service_names.get(endpoint, set())
+        if endpoint in active_endpoints or any(
+            name in active_serials or f"{name}._adb-tls-connect._tcp" in active_serials
+            for name in active_service_names
+        ):
             continue
         try:
             result = invoke([executable, "connect", endpoint], **options)
