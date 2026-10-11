@@ -25,8 +25,8 @@ from gitd.services._job_helpers import (
     _enqueue_job,
     _parse_job_summary,
     archive_to_runs,
-    scheduled_job_log_path,
     finish_job,
+    scheduled_job_log_path,
 )
 
 try:
