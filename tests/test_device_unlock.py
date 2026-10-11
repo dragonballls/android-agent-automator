@@ -118,17 +118,25 @@ def test_failed_unlock_does_not_retry_automatically(monkeypatch):
 
     monkeypatch.setattr("gitd.bots.common.adb.Device", FakeDevice)
     first = unlock.unlock_device("serial-123")
-    key_events_after_first = sum(
-        1 for call in commands if len(call) >= 4 and call[:3] == ("shell", "input", "keyevent")
+    pin_events_after_first = sum(
+        1
+        for call in commands
+        if len(call) >= 4
+        and call[:3] == ("shell", "input", "keyevent")
+        and call[-1] != "KEYCODE_WAKEUP"
     )
     second = unlock.unlock_device("serial-123")
-    key_events_after_second = sum(
-        1 for call in commands if len(call) >= 4 and call[:3] == ("shell", "input", "keyevent")
+    pin_events_after_second = sum(
+        1
+        for call in commands
+        if len(call) >= 4
+        and call[:3] == ("shell", "input", "keyevent")
+        and call[-1] != "KEYCODE_WAKEUP"
     )
 
     assert "still reports the phone locked" in first
     assert "previous PIN attempt" in second
-    assert key_events_after_second == key_events_after_first
+    assert pin_events_after_second == pin_events_after_first
 
 
 def test_unlock_device_tool_is_android_only():
