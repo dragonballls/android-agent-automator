@@ -51,12 +51,12 @@ def test_scheduler_builds_agent_task_command_with_saved_config(monkeypatch):
     }
     command = _build_scheduled_cmd("agent_task", config, "serial-123")
     assert command[0] == sys.executable
-    assert command[-1].endswith("scheduled_agent_task.py")
-    raw = command[-1]
-    from pathlib import Path
-
-    # The last command element is the runner path; the encoded payload is appended.
-    assert Path(raw).exists()
-    # Use a direct builder call assertion below to exercise payload wiring.
-    encoded = _build_scheduled_cmd("agent_task", config, "serial-123")[-1]
-    assert encoded == raw
+    assert command[1] == "-u"
+    assert command[2].endswith("scheduled_agent_task.py")
+    decoded = decode_payload(command[3])
+    assert decoded == {
+        "prompt": config["prompt"],
+        "provider": "gemini",
+        "model": "gemini-3.8-flash",
+        "device": "serial-123",
+    }
