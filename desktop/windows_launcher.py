@@ -10,6 +10,7 @@ import base64
 import json
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import threading
@@ -20,7 +21,7 @@ import webbrowser
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
-from wireless_adb import pair_and_connect
+from wireless_adb import pair_and_connect, reconnect_paired_devices
 
 
 APP_NAME = "Ghost in the Droid"
@@ -197,14 +198,19 @@ class Launcher:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title(f"{APP_NAME} — Windows Launcher")
-        self.root.geometry("900x840")
-        self.root.minsize(780, 740)
+        self.root.geometry("980x760")
+        self.root.minsize(820, 660)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.server_process: subprocess.Popen | None = None
         self.startup_enabled = tk.BooleanVar(value=self._is_startup_enabled())
         self.status_var = tk.StringVar(value="Service not checked")
         self.available_devices: list[str] = []
         self._device_selection_initialized = False
+        self._auto_reconnect_pending = False
+        self._last_auto_reconnect_attempt = 0.0
+        self.device_summary_var = tk.StringVar(value="No phones selected")
+        self.connection_message_var = tk.StringVar(value="Looking for authorized Android phones…")
+        self.ai_advanced_var = tk.BooleanVar(value=False)
         self.task_name_var = tk.StringVar(value="")
         self.daily_time_var = tk.StringVar(value="09:00")
         self.provider_var = tk.StringVar(value="gemini")
@@ -225,122 +231,292 @@ class Launcher:
         self.root.after(200, self.refresh_service_state)
 
     def _build_ui(self):
-        outer = ttk.Frame(self.root, padding=16)
+        """Build a guided three-step workflow; keep advanced service controls out of the way."""
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        self.root.configure(background="#f4f7fb")
+        style.configure("TFrame", background="#f4f7fb")
+        style.configure("TLabel", background="#f4f7fb", foreground="#243247", font=("Segoe UI", 10))
+        style.configure("AppTitle.TLabel", font=("Segoe UI", 19, "bold"), foreground="#172b4d")
+        style.configure("PageTitle.TLabel", font=("Segoe UI", 14, "bold"), foreground="#172b4d")
+        style.configure("Hint.TLabel", foreground="#566579", font=("Segoe UI", 9))
+        style.configure("Status.TLabel", foreground="#1b5e45", font=("Segoe UI", 9, "bold"))
+        style.configure("Primary.TButton", foreground="#ffffff", background="#235db5",
+                        padding=(12, 8), font=("Segoe UI", 9, "bold"))
+        style.map("Primary.TButton",
+                  background=[("active", "#174b95"), ("disabled", "#9aa9bd")],
+                  foreground=[("disabled", "#e7ebf0")])
+        style.configure("TNotebook", background="#f4f7fb", borderwidth=0)
+        style.configure("TNotebook.Tab", padding=(15, 9), font=("Segoe UI", 9, "bold"))
+        style.configure("Treeview", rowheight=28, font=("Segoe UI", 9))
+        style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
+
+        outer = ttk.Frame(self.root, padding=(22, 17))
         outer.pack(fill="both", expand=True)
 
         heading = ttk.Frame(outer)
-        heading.pack(fill="x")
-        ttk.Label(heading, text="GHOST IN THE DROID", font=("Segoe UI", 18, "bold")).pack(anchor="w")
+        heading.pack(fill="x", pady=(0, 10))
+        ttk.Label(heading, text="GHOST IN THE DROID", style="AppTitle.TLabel").pack(anchor="w")
         ttk.Label(
             heading,
-            text="Windows launcher • Android/iOS agent control • Saved daily automations",
-            font=("Segoe UI", 10),
-        ).pack(anchor="w", pady=(2, 8))
+            text="Connect your phone. Describe a task. Choose when it runs.",
+            style="Hint.TLabel",
+        ).pack(anchor="w", pady=(3, 0))
 
-        controls = ttk.Frame(outer)
-        controls.pack(fill="x", pady=(2, 8))
-        ttk.Button(controls, text="Start / Check Service", command=self.ensure_service).pack(side="left", padx=(0, 6))
-        ttk.Button(controls, text="Restart Service", command=self.restart_service).pack(side="left", padx=6)
-        ttk.Button(controls, text="Open Control Center", command=self.open_dashboard).pack(side="left", padx=6)
-        ttk.Button(controls, text="Refresh Tasks", command=self.refresh_tasks).pack(side="left", padx=6)
-        ttk.Button(controls, text="Configure Gemini Key", command=self.configure_gemini_key).pack(side="left", padx=6)
-        ttk.Label(outer, textvariable=self.status_var, foreground="#176b3a").pack(anchor="w", pady=(0, 8))
+        status_row = ttk.Frame(outer)
+        status_row.pack(fill="x", pady=(0, 12))
+        ttk.Label(status_row, textvariable=self.status_var, style="Status.TLabel").pack(side="left", anchor="w")
+        ttk.Button(status_row, text="Open Control Center", command=self.open_dashboard).pack(side="right")
 
-        task_frame = ttk.LabelFrame(outer, text="Create a saved daily task", padding=12)
-        task_frame.pack(fill="x", pady=(0, 10))
-        task_frame.columnconfigure(1, weight=1)
-        task_frame.columnconfigure(3, weight=1)
+        self.notebook = ttk.Notebook(outer)
+        self.notebook.pack(fill="both", expand=True)
+        self.phone_tab = ttk.Frame(self.notebook, padding=18)
+        self.task_tab = ttk.Frame(self.notebook, padding=18)
+        self.tasks_tab = ttk.Frame(self.notebook, padding=18)
+        self.settings_tab = ttk.Frame(self.notebook, padding=18)
+        self.notebook.add(self.phone_tab, text="1  Connect phone")
+        self.notebook.add(self.task_tab, text="2  Create task")
+        self.notebook.add(self.tasks_tab, text="3  Saved tasks")
+        self.notebook.add(self.settings_tab, text="Settings")
 
-        ttk.Label(task_frame, text="Task name").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=4)
-        ttk.Entry(task_frame, textvariable=self.task_name_var).grid(
-            row=0, column=1, columnspan=3, sticky="ew", pady=4
-        )
-
-        ttk.Label(task_frame, text="Target phones\n(Ctrl/Shift-select)").grid(
-            row=1, column=0, sticky="nw", padx=(0, 6), pady=4
-        )
-        device_frame = ttk.Frame(task_frame)
-        device_frame.grid(row=1, column=1, columnspan=3, sticky="ew", pady=4)
-        self.device_listbox = tk.Listbox(
-            device_frame, selectmode=tk.EXTENDED, exportselection=False, height=4, font=("Segoe UI", 9)
-        )
-        device_scrollbar = ttk.Scrollbar(device_frame, orient="vertical", command=self.device_listbox.yview)
-        self.device_listbox.configure(yscrollcommand=device_scrollbar.set)
-        self.device_listbox.pack(side="left", fill="both", expand=True)
-        device_scrollbar.pack(side="right", fill="y")
-
-        ttk.Label(task_frame, text="AI provider").grid(row=2, column=0, sticky="w", padx=(0, 6), pady=4)
-        self.provider_combo = ttk.Combobox(
-            task_frame, textvariable=self.provider_var, values=list(self._provider_data), state="readonly"
-        )
-        self.provider_combo.grid(row=2, column=1, sticky="ew", padx=(0, 14), pady=4)
-        self.provider_combo.bind("<<ComboboxSelected>>", self.on_provider_changed)
-        ttk.Label(task_frame, text="Model ID").grid(row=2, column=2, sticky="w", padx=(0, 6), pady=4)
-        self.model_combo = ttk.Combobox(task_frame, textvariable=self.model_var, values=self._provider_data["gemini"])
-        self.model_combo.grid(row=2, column=3, sticky="ew", pady=4)
-
-        ttk.Label(task_frame, text="Daily run time (24-hour)").grid(row=3, column=0, sticky="w", padx=(0, 6), pady=4)
-        ttk.Entry(task_frame, textvariable=self.daily_time_var, width=12).grid(
-            row=3, column=1, sticky="w", padx=(0, 14), pady=4
-        )
-        ttk.Label(task_frame, text="Local time • repeats every day").grid(
-            row=3, column=2, columnspan=2, sticky="w", pady=4
-        )
-
-        ttk.Label(task_frame, text="What should the agent do?").grid(
-            row=4, column=0, columnspan=4, sticky="w", pady=(8, 4)
-        )
-        self.prompt_text = tk.Text(task_frame, height=4, wrap="word", font=("Segoe UI", 10))
-        self.prompt_text.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(0, 8))
-        self.prompt_text.insert("1.0", "Open the app I specify and complete this authorized task: ")
-        action_row = ttk.Frame(task_frame)
-        action_row.grid(row=6, column=0, columnspan=4, sticky="ew")
-        ttk.Button(action_row, text="Save Daily Task", command=self.save_task).pack(side="left")
-        ttk.Button(action_row, text="Refresh Connected Phones", command=self.refresh_devices).pack(side="left", padx=8)
-        ttk.Button(action_row, text="Select All Phones", command=self.select_all_devices).pack(side="left", padx=6)
-        ttk.Button(action_row, text="Clear Selection", command=self.clear_device_selection).pack(side="left", padx=6)
-        ttk.Button(action_row, text="Pair over Wi-Fi", command=self.open_wireless_pairing).pack(side="left", padx=6)
+        # STEP 1 — Phones. Existing authorized USB devices are detected automatically;
+        # saved ADB wireless pairings are retried in the background.
+        ttk.Label(self.phone_tab, text="Connect your phone", style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(
-            action_row,
-            text="Selected phones run in parallel.",
-            foreground="#555555",
+            self.phone_tab,
+            text="Plug in by USB with USB debugging enabled, or pair once over Wi-Fi. "
+                 "After Android authorizes this PC, the launcher will look for the phone automatically.",
+            wraplength=790, justify="left",
+        ).pack(anchor="w", pady=(6, 12))
+
+        device_card = ttk.LabelFrame(self.phone_tab, text="Phones found", padding=12)
+        device_card.pack(fill="both", expand=True)
+        device_card.columnconfigure(0, weight=1)
+        device_card.rowconfigure(0, weight=1)
+        self.device_listbox = tk.Listbox(
+            device_card, selectmode=tk.EXTENDED, exportselection=False, height=9,
+            font=("Segoe UI", 10), activestyle="dotbox", relief="solid", borderwidth=1,
+            selectbackground="#d9e8ff", selectforeground="#172b4d",
+        )
+        device_scrollbar = ttk.Scrollbar(device_card, orient="vertical", command=self.device_listbox.yview)
+        self.device_listbox.configure(yscrollcommand=device_scrollbar.set)
+        self.device_listbox.grid(row=0, column=0, sticky="nsew")
+        device_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.device_listbox.bind("<<ListboxSelect>>", self._update_device_summary)
+
+        select_row = ttk.Frame(device_card)
+        select_row.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(9, 2))
+        ttk.Label(select_row, textvariable=self.device_summary_var, style="Status.TLabel").pack(side="left")
+        ttk.Button(select_row, text="Select all", command=self.select_all_devices).pack(side="right", padx=(6, 0))
+        ttk.Button(select_row, text="Clear", command=self.clear_device_selection).pack(side="right")
+
+        ttk.Label(
+            self.phone_tab, textvariable=self.connection_message_var, wraplength=790,
+            justify="left", style="Hint.TLabel",
+        ).pack(anchor="w", pady=(10, 8))
+        connection_actions = ttk.Frame(self.phone_tab)
+        connection_actions.pack(fill="x")
+        ttk.Button(
+            connection_actions, text="Start service and find phones",
+            style="Primary.TButton", command=lambda: self.ensure_service(self.refresh_devices),
+        ).pack(side="left")
+        ttk.Button(
+            connection_actions, text="Pair over Wi-Fi", command=self.open_wireless_pairing,
+        ).pack(side="left", padx=(8, 0))
+        ttk.Button(
+            connection_actions, text="Open Phone Link", command=self._open_phone_link,
+        ).pack(side="left", padx=(8, 0))
+        ttk.Label(
+            self.phone_tab,
+            text="Note: Phone Link is for viewing/manual use; phone control uses Android's authorized ADB connection.",
+            style="Hint.TLabel", wraplength=790, justify="left",
+        ).pack(anchor="w", pady=(10, 0))
+
+        # STEP 2 — One plain-language task editor. Model IDs are hidden unless requested.
+        ttk.Label(self.task_tab, text="Tell the agent what to do", style="PageTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            self.task_tab,
+            text="Use clear instructions for an app and task you are authorized to automate. "
+                 "Select phones in the Connect phone tab first.",
+            style="Hint.TLabel", wraplength=790, justify="left",
+        ).pack(anchor="w", pady=(6, 12))
+
+        task_form = ttk.Frame(self.task_tab)
+        task_form.pack(fill="both", expand=True)
+        task_form.columnconfigure(1, weight=1)
+        ttk.Label(task_form, text="Task name").grid(row=0, column=0, sticky="w", padx=(0, 12), pady=7)
+        ttk.Entry(task_form, textvariable=self.task_name_var).grid(row=0, column=1, sticky="ew", pady=7)
+        ttk.Label(task_form, text="Run every day at").grid(row=1, column=0, sticky="w", padx=(0, 12), pady=7)
+        time_row = ttk.Frame(task_form)
+        time_row.grid(row=1, column=1, sticky="w", pady=7)
+        ttk.Entry(time_row, textvariable=self.daily_time_var, width=10).pack(side="left")
+        ttk.Label(time_row, text="  Local time, 24-hour format (for example 09:00)", style="Hint.TLabel").pack(side="left")
+        ttk.Label(task_form, text="Instructions").grid(row=2, column=0, sticky="nw", padx=(0, 12), pady=7)
+        self.prompt_text = tk.Text(
+            task_form, height=10, wrap="word", font=("Segoe UI", 10),
+            relief="solid", borderwidth=1, padx=10, pady=9,
+            background="#ffffff", foreground="#243247", insertbackground="#243247",
+        )
+        self.prompt_text.grid(row=2, column=1, sticky="nsew", pady=7)
+        task_form.rowconfigure(2, weight=1)
+        ttk.Label(
+            task_form, text="Saved tasks repeat daily until paused or deleted. Run Now is for a one-time test.",
+            style="Hint.TLabel", wraplength=790, justify="left",
+        ).grid(row=3, column=1, sticky="w", pady=(4, 8))
+
+        advanced_toggle = ttk.Checkbutton(
+            task_form, text="Advanced AI model options", variable=self.ai_advanced_var,
+            command=self._toggle_ai_advanced,
+        )
+        advanced_toggle.grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.ai_advanced_frame = ttk.LabelFrame(task_form, text="AI model", padding=10)
+        self.ai_advanced_frame.columnconfigure(1, weight=1)
+        self.ai_advanced_frame.columnconfigure(3, weight=1)
+        ttk.Label(self.ai_advanced_frame, text="Provider").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
+        self.provider_combo = ttk.Combobox(
+            self.ai_advanced_frame, textvariable=self.provider_var,
+            values=list(self._provider_data), state="readonly", width=19,
+        )
+        self.provider_combo.grid(row=0, column=1, sticky="ew", padx=(0, 14), pady=4)
+        self.provider_combo.bind("<<ComboboxSelected>>", self.on_provider_changed)
+        ttk.Label(self.ai_advanced_frame, text="Model ID").grid(row=0, column=2, sticky="w", padx=(0, 8), pady=4)
+        self.model_combo = ttk.Combobox(
+            self.ai_advanced_frame, textvariable=self.model_var, values=self._provider_data["gemini"],
+        )
+        self.model_combo.grid(row=0, column=3, sticky="ew", pady=4)
+
+        action_row = ttk.Frame(self.task_tab)
+        action_row.pack(fill="x", pady=(12, 0))
+        ttk.Label(action_row, textvariable=self.device_summary_var, style="Hint.TLabel").pack(side="left")
+        ttk.Button(
+            action_row, text="Choose phones", command=lambda: self.notebook.select(self.phone_tab),
+        ).pack(side="right", padx=(8, 0))
+        ttk.Button(
+            action_row, text="Save daily task", style="Primary.TButton", command=self.save_task,
         ).pack(side="right")
 
-        saved_frame = ttk.LabelFrame(outer, text="Saved daily tasks", padding=10)
+        # STEP 3 — Task management in its own uncluttered page.
+        ttk.Label(self.tasks_tab, text="Saved tasks and schedules", style="PageTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            self.tasks_tab,
+            text="Run a selected task now, pause its recurring schedule, or delete it.",
+            style="Hint.TLabel",
+        ).pack(anchor="w", pady=(6, 12))
+        saved_frame = ttk.Frame(self.tasks_tab)
         saved_frame.pack(fill="both", expand=True)
+        saved_frame.columnconfigure(0, weight=1)
+        saved_frame.rowconfigure(0, weight=1)
         columns = ("name", "device", "time", "enabled", "next")
-        self.tree = ttk.Treeview(saved_frame, columns=columns, show="headings", height=9, selectmode="extended")
+        self.tree = ttk.Treeview(saved_frame, columns=columns, show="headings", height=12, selectmode="extended")
         for key, title, width in (
-            ("name", "Task", 220),
-            ("device", "Phone", 170),
-            ("time", "Daily at", 95),
-            ("enabled", "Status", 80),
-            ("next", "Next run", 150),
+            ("name", "Task", 235), ("device", "Phone", 180), ("time", "Daily at", 95),
+            ("enabled", "Schedule", 85), ("next", "Next run", 155),
         ):
             self.tree.heading(key, text=title)
             self.tree.column(key, width=width, anchor="w")
-        scrollbar = ttk.Scrollbar(saved_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        task_scrollbar = ttk.Scrollbar(saved_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=task_scrollbar.set)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        task_scrollbar.grid(row=0, column=1, sticky="ns")
+        task_actions = ttk.Frame(self.tasks_tab)
+        task_actions.pack(fill="x", pady=(12, 0))
+        ttk.Button(task_actions, text="Refresh", command=self.refresh_tasks).pack(side="left")
+        ttk.Button(task_actions, text="Run Now", style="Primary.TButton", command=self.run_selected).pack(side="left", padx=(8, 0))
+        ttk.Button(task_actions, text="Pause / Enable", command=self.toggle_selected).pack(side="left", padx=(8, 0))
+        ttk.Button(task_actions, text="Delete", command=self.delete_selected).pack(side="left", padx=(8, 0))
 
-        buttons = ttk.Frame(outer)
-        buttons.pack(fill="x", pady=(8, 0))
-        ttk.Button(buttons, text="Run Now", command=self.run_selected).pack(side="left", padx=(0, 6))
-        ttk.Button(buttons, text="Pause / Enable", command=self.toggle_selected).pack(side="left", padx=6)
-        ttk.Button(buttons, text="Delete", command=self.delete_selected).pack(side="left", padx=6)
-        ttk.Checkbutton(
-            buttons,
-            text="Start automation service when I sign in to Windows",
-            variable=self.startup_enabled,
-            command=self.set_startup,
-        ).pack(side="right")
-
+        # Settings are available but no longer compete with the first-time workflow.
+        ttk.Label(self.settings_tab, text="Service and account settings", style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(
-            outer,
-            text=f"Local data: {DATA_DIR}  •  Dashboard: {_api_base()}",
-            foreground="#666666",
-        ).pack(anchor="w", pady=(10, 0))
+            self.settings_tab, text="Most users only need to set up Gemini once; the other controls are optional.",
+            style="Hint.TLabel", wraplength=790, justify="left",
+        ).pack(anchor="w", pady=(6, 14))
+        service_box = ttk.LabelFrame(self.settings_tab, text="Local service", padding=12)
+        service_box.pack(fill="x", pady=(0, 12))
+        ttk.Button(service_box, text="Start / Check Service", style="Primary.TButton", command=self.ensure_service).pack(side="left")
+        ttk.Button(service_box, text="Restart Service", command=self.restart_service).pack(side="left", padx=(8, 0))
+        ttk.Label(service_box, text=f"Local dashboard: {_api_base()}", style="Hint.TLabel").pack(side="left", padx=(14, 0))
+        account_box = ttk.LabelFrame(self.settings_tab, text="AI access", padding=12)
+        account_box.pack(fill="x", pady=(0, 12))
+        ttk.Label(
+            account_box, text="Gemini key is stored in the operating system's credential vault.",
+            style="Hint.TLabel", wraplength=720, justify="left",
+        ).pack(anchor="w", pady=(0, 8))
+        ttk.Button(account_box, text="Configure Gemini API key", command=self.configure_gemini_key).pack(anchor="w")
+        ttk.Checkbutton(
+            self.settings_tab, text="Start the service when I sign in to Windows",
+            variable=self.startup_enabled, command=self.set_startup,
+        ).pack(anchor="w", pady=(2, 14))
+        ttk.Label(
+            self.settings_tab, text=f"Local data folder: {DATA_DIR}", style="Hint.TLabel",
+            wraplength=790, justify="left",
+        ).pack(anchor="w")
+
+        if not shutil.which("adb"):
+            self.connection_message_var.set(
+                "ADB was not found on PATH. Install Android SDK Platform-Tools and add adb.exe to PATH "
+                "to enable automatic phone detection and wireless reconnection."
+            )
+
+    def _toggle_ai_advanced(self):
+        if self.ai_advanced_var.get():
+            self.ai_advanced_frame.pack(fill="x", pady=(8, 0))
+        else:
+            self.ai_advanced_frame.pack_forget()
+
+    def _update_device_summary(self, _event=None):
+        try:
+            count = len(self.device_listbox.curselection())
+        except tk.TclError:
+            count = 0
+        noun = "phone" if count == 1 else "phones"
+        self.device_summary_var.set(
+            f"{count} {noun} selected" if count else "No phones selected — choose one above"
+        )
+
+    def _open_phone_link(self):
+        try:
+            if os.name == "nt":
+                os.startfile("ms-phone:")
+            else:
+                webbrowser.open("ms-phone:")
+        except Exception:
+            messagebox.showinfo(APP_NAME, "Open Phone Link from the Windows Start menu.", parent=self.root)
+
+    def _maybe_auto_reconnect_wireless(self):
+        """Retry mDNS-advertised, already-paired ADB wireless devices without blocking the UI."""
+        if not shutil.which("adb") or self._auto_reconnect_pending:
+            return
+        now = time.monotonic()
+        if now - self._last_auto_reconnect_attempt < 25:
+            return
+        self._last_auto_reconnect_attempt = now
+        self._auto_reconnect_pending = True
+
+        def worker():
+            try:
+                connected = reconnect_paired_devices()
+            except Exception:
+                connected = []
+            try:
+                self.root.after(0, lambda devices=connected: self._finish_auto_reconnect(devices))
+            except RuntimeError:
+                pass
+
+        threading.Thread(target=worker, daemon=True, name="adb-auto-reconnect").start()
+
+    def _finish_auto_reconnect(self, connected: list[str]):
+        self._auto_reconnect_pending = False
+        if connected:
+            count = len(connected)
+            noun = "phone" if count == 1 else "phones"
+            self.connection_message_var.set(
+                f"Automatically connected {count} previously paired {noun} over Wi-Fi."
+            )
+            self.refresh_devices()
 
     def _service_ready(self) -> bool:
         try:
@@ -497,6 +673,7 @@ class Launcher:
     def refresh_devices(self):
         if not self._service_ready():
             return
+        self._maybe_auto_reconnect_wireless()
         try:
             result = _api_request("/api/phone/devices", timeout=2)
             if isinstance(result, dict):
@@ -525,6 +702,11 @@ class Launcher:
                 self.device_listbox.selection_set(0)
             if serials:
                 self._device_selection_initialized = True
+            self._update_device_summary()
+            if not serials:
+                self.connection_message_var.set(
+                    "No phones found yet. Connect by USB and approve the debugging prompt, or use Pair over Wi-Fi once."
+                )
         except Exception:
             pass
 
