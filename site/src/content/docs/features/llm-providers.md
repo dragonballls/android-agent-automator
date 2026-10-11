@@ -46,13 +46,13 @@ Provider `anthropic` unlocks [Claude Sonnet 4](https://www.anthropic.com/claude/
 
 Use Gemini directly with a Google AI Studio API key, without routing requests through OpenRouter. This uses Google's documented OpenAI-compatible endpoint and the existing OpenAI client, so custom device tool calls use the same bounded multi-turn loop.
 
-Create a key in [Google AI Studio](https://aistudio.google.com/apikey), then add it to your local \`.env\` file:
+Create a key in [Google AI Studio](https://aistudio.google.com/apikey), then add it to your local `.env` file:
 
-\`\`\`bash
+```bash
 GEMINI_API_KEY=your-gemini-api-key
-\`\`\`
+```
 
-The default model is \`gemini-3.8-flash\`; the provider selector also offers \`gemini-3.1-pro-preview\`. You can select another compatible Gemini API model by entering its exact model ID in the model selector. See Google's [model list](https://ai.google.dev/gemini-api/docs/models) for current availability.
+The default model is `gemini-3.8-flash`; the provider selector also offers `gemini-3.1-pro-preview`. You can select another compatible Gemini API model by entering its exact model ID in the model selector. See Google's [model list](https://ai.google.dev/gemini-api/docs/models) for current availability.
 
 The agent uses the existing phone tools (screen inspection, tap/swipe/type, and app navigation) and returns tool results to Gemini for subsequent steps. The API key stays in the backend environment and should never be put in browser code or committed to Git.
 
