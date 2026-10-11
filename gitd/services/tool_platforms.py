@@ -115,6 +115,9 @@ _ANDROID_ONLY = {
     "list_crashes": "Reads the Android logcat crash buffer; iOS needs syslog/CrashReporter support.",
     "get_crash": "Reads the Android logcat crash buffer; iOS needs syslog/CrashReporter support.",
     "launch_intent": "Android intents have no iOS equivalent.",
+    "unlock_device": (
+        "Uses a locally enrolled PIN via already-authorized ADB; it does not bypass Android authentication."
+    ),
     "toggle_overlay": "Portal overlay is Android-only.",
     # NOTE: speak_text is classified cross_platform above (iOS gained WDA
     # /wda/speak on feat/ios-ondevice); intentionally not android_only here.

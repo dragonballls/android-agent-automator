@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from gitd.models.base import get_db
+from gitd.services._job_helpers import scheduled_job_log_path
 
 router = APIRouter(tags=["scheduler"])
 
@@ -66,7 +67,7 @@ def _sched_next_run(sched: dict, db: Session) -> str | None:
 
 def _parse_live_stats(job: dict) -> str:
     """Parse a running job's log file for live progress stats."""
-    log_path = job.get("log_file") or f"/tmp/sched_job_{job['id']}.log"
+    log_path = job.get("log_file") or scheduled_job_log_path(job["id"])
     try:
         with open(log_path, "r", errors="replace") as f:
             lines = f.readlines()
@@ -340,7 +341,7 @@ def scheduler_queue_logs(qid: int, since: int = 0, db: Session = Depends(get_db)
     ).first()
     log_path = row[0] if row and row[0] else None
     if not log_path:
-        log_path = f"/tmp/sched_job_{qid}.log"
+        log_path = scheduled_job_log_path(qid)
     p = Path(log_path)
     if not p.exists():
         return {"lines": [], "total": 0}

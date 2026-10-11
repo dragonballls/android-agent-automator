@@ -51,7 +51,9 @@ def test_agent_and_mcp_tool_catalogs_match():
     # `chain` is the agent-chat batch primitive — the mirror image of run_flow
     # (which is MCP-only): MCP clients batch via run_flow, so chain stays out of
     # the MCP catalog.
-    mcp_excluded = {"shell", "run_skill", "chain", "screenshot_sequence", "sub_agent"}
+    # Device PIN unlock is intentionally agent-chat only: MCP clients must not
+    # be able to trigger locally enrolled credential use without task context.
+    mcp_excluded = {"shell", "run_skill", "chain", "screenshot_sequence", "sub_agent", "unlock_device"}
     # MCP-only: batched flow + crash reports have no in-process agent-tool
     # equivalent (agents read crashes via their own transcript context).
     mcp_only = {"run_flow", "list_crashes", "get_crash"}
@@ -98,10 +100,13 @@ def test_platform_classifications_have_stable_ios_semantics():
     assert supports_platform("launch_intent", "android") is True
     assert supports_platform("toggle_overlay", "ios") is False
     assert supports_platform("toggle_overlay", "android") is True
+    assert supports_platform("unlock_device", "android") is True
+    assert supports_platform("unlock_device", "ios") is False
 
     assert tool_platform_info("shell").support == "android_only"
     assert tool_platform_info("launch_intent").support == "android_only"
     assert tool_platform_info("toggle_overlay").support == "android_only"
+    assert tool_platform_info("unlock_device").support == "android_only"
     assert tool_platform_info("device_health").support == "cross_platform"
     assert tool_platform_info("fix_device_health").support == "cross_platform"
     assert tool_platform_info("get_screen_xml").support == "cross_platform"

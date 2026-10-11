@@ -3,7 +3,28 @@ Pydantic-settings configuration — reads from .env / environment variables.
 Compatible with both pydantic v1 and v2.
 """
 
+import os
+import sys
 from pathlib import Path
+
+
+def _default_base_dir() -> Path:
+    """Use persistent per-user storage for packaged Windows builds."""
+    if getattr(sys, "frozen", False):
+        if os.name == "nt":
+            root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        else:
+            root = Path.home() / ".local" / "share"
+        return root / "GhostInTheDroid"
+    return Path(__file__).resolve().parent.parent
+
+
+def _default_db_path() -> Path:
+    """Keep the database outside PyInstaller's temporary extraction directory."""
+    base = _default_base_dir()
+    if getattr(sys, "frozen", False):
+        return base / "data" / "gitd.db"
+    return base / "data" / "gitd.db"
 
 try:
     from pydantic_settings import BaseSettings
@@ -16,8 +37,8 @@ class Settings(BaseSettings):
     """Application settings loaded from .env and environment variables."""
 
     # ── Paths ────────────────────────────────────────────────────────────────
-    base_dir: Path = Path(__file__).resolve().parent.parent
-    db_path: Path = Path(__file__).resolve().parent.parent / "data" / "gitd.db"
+    base_dir: Path = _default_base_dir()
+    db_path: Path = _default_db_path()
 
     # ── Server ───────────────────────────────────────────────────────────────
     host: str = "0.0.0.0"
@@ -50,6 +71,7 @@ class Settings(BaseSettings):
     # ── API keys (optional, loaded from env) ─────────────────────────────────
     openai_api_key: str = ""
     anthropic_api_key: str = ""
+    gemini_api_key: str = ""
     openrouter_api_key: str = ""
 
     # ── Ollama ──────────────────────────────────────────────────────────────

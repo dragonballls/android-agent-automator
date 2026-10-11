@@ -236,6 +236,20 @@ TOOLS = [
         },
     },
     {
+        "name": "unlock_device",
+        "description": (
+            "Unlock an Android device for the owner's already-authorized task using a numeric PIN previously enrolled "
+            "with `android-agent unlock-pin set <device-serial>`. The PIN is read only from the computer's secure OS "
+            "credential vault and is never accepted as an argument or returned. Makes at most one attempt and verifies "
+            "the lock state. Call only when the lock screen blocks the requested task; do not retry failures or bypass biometrics."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"device": {"type": "string"}},
+            "required": ["device"],
+        },
+    },
+    {
         "name": "long_press",
         "description": "Long press at coordinates. For context menus, drag initiation.",
         "input_schema": {
@@ -916,6 +930,7 @@ _UI_ACTION_TOOLS = {
     "press_back",
     "press_home",
     "press_key",
+    "unlock_device",
     "long_press",
     "launch_app",
     "open_url",
@@ -1178,6 +1193,10 @@ def _execute_tool_inner(name: str, args: dict) -> str:
                 key = normalize_keycode(key)
                 Device(device).adb("shell", "input", "keyevent", key)
             return f"Pressed {key}"
+        elif name == "unlock_device":
+            from gitd.services.device_unlock import unlock_device
+
+            return unlock_device(device)
         elif name == "long_press":
             get_device(device).long_press(args["x"], args["y"], duration_ms=args.get("duration_ms", 1000))
             return f"Long pressed ({args['x']}, {args['y']})"

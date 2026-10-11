@@ -26,6 +26,7 @@ from gitd.services._job_helpers import (
     _parse_job_summary,
     archive_to_runs,
     finish_job,
+    scheduled_job_log_path,
 )
 
 try:
@@ -225,17 +226,26 @@ def _scheduler_tick():
                                 max_dur,
                             )
                             try:
-                                os.kill(pid, signal.SIGTERM)
-                                time.sleep(2)
-                                os.kill(pid, 0)
-                                os.kill(pid, signal.SIGKILL)
+                                if os.name == "nt":
+                                    subprocess.run(
+                                        ["taskkill", "/PID", str(pid), "/T", "/F"],
+                                        capture_output=True,
+                                        text=True,
+                                        timeout=8,
+                                        check=False,
+                                    )
+                                else:
+                                    os.kill(pid, signal.SIGTERM)
+                                    time.sleep(2)
+                                    os.kill(pid, 0)
+                                    os.kill(pid, signal.SIGKILL)
                             except (ProcessLookupError, OSError):
                                 pass
                             try:
                                 os.waitpid(pid, os.WNOHANG)
                             except (ChildProcessError, OSError):
                                 pass
-                            log_file = o.get("log_file") or f"/tmp/sched_job_{o['id']}.log"
+                            log_file = o.get("log_file") or scheduled_job_log_path(o["id"])
                             summary = _parse_job_summary(o["id"], log_path=log_file)
                             dur_str = f"{int(elapsed / 60)}m"
                             msg = f"T {dur_str}"
@@ -251,7 +261,7 @@ def _scheduler_tick():
                         o["job_type"],
                         pid,
                     )
-                    log_file = o.get("log_file") or f"/tmp/sched_job_{o['id']}.log"
+                    log_file = o.get("log_file") or scheduled_job_log_path(o["id"])
                     orphan_summary = _parse_job_summary(o["id"], log_path=log_file)
                     try:
                         os.waitpid(pid, os.WNOHANG)

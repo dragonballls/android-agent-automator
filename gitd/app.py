@@ -4,10 +4,13 @@ FastAPI application factory for Ghost in the Droid.
 
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from gitd.models.base import Base, engine
 from gitd.routers.agent_chat import router as agent_chat_router
@@ -151,6 +154,24 @@ def create_app() -> FastAPI:
     app.include_router(emulator_pool_router)
     app.include_router(benchmarks_router)
     app.include_router(traces_router)
+
+    # Serve the compiled Vue dashboard from the same localhost origin in the
+    # packaged Windows launcher. API routes above take precedence; unknown
+    # non-API paths fall back to index.html for client-side routing.
+    bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    frontend_dist = bundle_root / "frontend" / "dist"
+    if frontend_dist.is_dir() and (frontend_dist / "index.html").is_file():
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        def frontend_spa(full_path: str):
+            requested = (frontend_dist / full_path).resolve()
+            try:
+                requested.relative_to(frontend_dist.resolve())
+            except ValueError:
+                raise HTTPException(status_code=404, detail="Not found")
+            if requested.is_file():
+                return FileResponse(requested)
+            return FileResponse(frontend_dist / "index.html")
 
     # Plugin hook: load premium features if installed
     try:

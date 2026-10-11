@@ -5,6 +5,7 @@ Owns _phone_procs (running-process registry) and all functions that
 build, launch, kill, and schedule subprocess-based jobs.
 """
 
+import base64
 import json
 import logging
 import os
@@ -247,6 +248,20 @@ def _build_scheduled_cmd(job_type: str, config: dict, phone: str | None) -> list
         if config.get("output"):
             cmd += ["--output", config["output"]]
         return cmd
+    elif job_type == "agent_task":
+        payload = {
+            "prompt": str(config.get("prompt") or "").strip(),
+            "provider": str(config.get("provider") or "gemini"),
+            "model": str(config.get("model") or ""),
+            "device": phone or str(config.get("device") or ""),
+        }
+        encoded = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
+        if getattr(sys, "frozen", False):
+            # The packaged EXE has an internal runner mode, so scheduled jobs do
+            # not rely on Python being installed separately on the user's PC.
+            return [sys.executable, "--run-scheduled-agent-task", encoded]
+        runner = resolve_script("services/scheduled_agent_task.py")
+        return [sys.executable, "-u", str(runner), encoded]
     elif job_type in ("skill_workflow", "skill_action"):
         if _skill_config_preflight(job_type, config):
             return None
@@ -302,6 +317,16 @@ def _job_platform_preflight(phone: str | None, job_type: str) -> str | None:
 
 
 def _skill_config_preflight(job_type: str, config: dict) -> str | None:
+    if job_type == "agent_task":
+        prompt = str((config or {}).get("prompt") or "").strip()
+        if not prompt:
+            return "agent_task jobs require config.prompt"
+        if len(prompt) > 5000:
+            return "agent_task config.prompt must be no longer than 5000 characters"
+        provider = str((config or {}).get("provider") or "gemini").strip()
+        if provider not in {"claude-code", "anthropic", "openrouter", "gemini", "vllm", "ollama", "on-device"}:
+            return "agent_task config.provider is not a supported agent-chat provider"
+        return None
     if job_type not in ("skill_workflow", "skill_action"):
         return None
     skill_name = str((config or {}).get("skill") or "").strip()
@@ -401,13 +426,20 @@ def _launch_scheduled_job(db, job_row: dict):
         archive_to_runs(db, job_id)
         return
 
-    log_path = f"/tmp/sched_job_{job_id}.log"
+    from gitd.services._job_helpers import scheduled_job_log_path
+
+    log_path = scheduled_job_log_path(job_id)
     log_f = open(log_path, "w", buffering=1)
+    job_env = os.environ.copy()
+    # Windowed PyInstaller children can have sys.stdout=None; pass the same
+    # scheduler log path so their internal runner can explicitly append to it.
+    job_env["GHOST_SCHEDULE_LOG_FILE"] = log_path
     proc = subprocess.Popen(
         cmd,
         stdout=log_f,
         stderr=subprocess.STDOUT,
         cwd=str(_SCRIPT_DIR),
+        env=job_env,
     )
     db.execute(
         text(

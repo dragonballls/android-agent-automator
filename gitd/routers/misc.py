@@ -8,16 +8,21 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 router = APIRouter()
 
 
 @router.get("/", include_in_schema=False)
 def index():
-    """Redirect root to API docs."""
+    """Serve the bundled dashboard in packaged builds; otherwise show API docs."""
+    bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+    frontend_index = bundle_root / "frontend" / "dist" / "index.html"
+    if frontend_index.is_file():
+        return FileResponse(frontend_index)
     return RedirectResponse(url="/docs")
 
 
@@ -95,7 +100,10 @@ def api_server_restart():
 
     def _restart():
         time.sleep(0.5)
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        # In a frozen Windows EXE, argv[0] is already the executable path.
+        # Reusing it as an argument would invoke "GhostLauncher.exe GhostLauncher.exe".
+        args = [sys.executable, *sys.argv[1:]] if getattr(sys, "frozen", False) else [sys.executable, *sys.argv]
+        os.execv(sys.executable, args)
 
     threading.Thread(target=_restart, daemon=True).start()
     return {"ok": True, "message": "Restarting..."}
