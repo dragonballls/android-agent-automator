@@ -61,6 +61,7 @@ def test_scheduler_builds_agent_task_command_with_saved_config(monkeypatch):
         "device": "serial-123",
     }
 
+
 def test_saved_task_prompt_repeats_until_verified_completion_then_advances():
     prompt = build_execution_prompt("Repeat the safe setup steps until complete, then open the next page.")
 
