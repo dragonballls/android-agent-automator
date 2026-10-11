@@ -7,7 +7,7 @@ The GitHub Actions workflow builds a single-file `GhostLauncher.exe` and publish
 1. Download `GhostLauncher.exe` from the latest successful **Windows launcher EXE** workflow run.
 2. Start the EXE and press **Start / Check Service**.
 3. Click **Configure Gemini Key** and enter your Google AI Studio key; it is stored in the Windows OS credential vault, not a plaintext settings file.
-4. Make sure Android SDK Platform-Tools (which includes ADB) is installed and available on PATH, then connect your Android phone and approve its USB-debugging authorization prompt. The EXE bundles the app but does not redistribute Google's separate platform-tools package. Connected device serials appear in the launcher's Target phones list. Official Platform-Tools downloads: https://developer.android.com/tools/releases/platform-tools
+4. Install Android SDK Platform-Tools (which includes ADB) and make sure `adb` is available on PATH. To avoid a USB cable, click **Pair over Wi-Fi** in the launcher and follow the on-screen guide for Android Wireless debugging (Android 11 or later). Pairing uses a short-lived code entered via standard input; the launcher does not store or log it. Connected wireless devices appear in **Target phones** and can be auto-reconnected when Android keeps wireless debugging available. Official Platform-Tools downloads: https://developer.android.com/tools/releases/platform-tools
 5. Enter a task, provider/model, and daily time. In **Target phones**, select one phone or Ctrl/Shift-select multiple connected phones, then click **Save Daily Task**. This creates one schedule per phone at the same daily time.
 6. In **Saved daily tasks**, Ctrl/Shift-select multiple rows to run, pause/enable, or delete them as a batch. **Run Now** queues each selected task immediately; jobs for different phones can run concurrently, while tasks for the same phone are serialized by its device queue.
 7. The same saved schedules are available through the bundled Control Center.
@@ -17,6 +17,8 @@ The GitHub Actions workflow builds a single-file `GhostLauncher.exe` and publish
 The local background service runs the scheduler and keeps saved tasks in the app database. Closing the visible launcher window leaves the service running. Enable **Start automation service when I sign in to Windows** to start the background service after you log into Windows again.
 
 The computer must be awake and signed in at the scheduled time, and the phone must remain connected. A task requiring biometric approval or an unsupported unlock flow can pause for manual help. A failed PIN attempt is not retried automatically.
+
+**Phone Link and automation:** Phone Link may remain paired for viewing apps and manual mouse/keyboard interaction. It does not expose a general third-party API for this launcher to take over its control session. The launcher uses ADB for reliable screen reading and input; **Pair over Wi-Fi** sets up this separate wireless automation connection without requiring an ongoing USB cable. Use Android Wireless debugging only on trusted networks, and turn it off when you no longer need wireless ADB.
 
 ## Multi-step and repetitive tasks
 
