@@ -7,7 +7,7 @@ The GitHub Actions workflow builds a single-file `GhostLauncher.exe` and publish
 1. Download `GhostLauncher.exe` from the latest successful **Windows launcher EXE** workflow run.
 2. Start the EXE and press **Start / Check Service**.
 3. Click **Configure Gemini Key** and enter your Google AI Studio key; it is stored in the Windows OS credential vault, not a plaintext settings file.
-4. Connect your Android phone using ADB and approve the Android USB-debugging authorization prompt. Select the device serial in the launcher.
+4. Make sure Android SDK Platform-Tools (which includes ADB) is installed and available on PATH, then connect your Android phone and approve its USB-debugging authorization prompt. The EXE bundles the app but does not redistribute Google's separate platform-tools package. Select the device serial in the launcher. Official Platform-Tools downloads: https://developer.android.com/tools/releases/platform-tools
 5. Enter a task, provider/model, and daily time, then click **Save Daily Task**.
 6. Use **Run Now**, **Pause / Enable**, or **Delete** to control the task. The same saved schedules are available through the bundled Control Center.
 
