@@ -63,7 +63,9 @@ def _keyring_module():
         raise RuntimeError("The OS credential vault could not be initialized.") from exc
 
     allowed = any(module_name == prefix or module_name.startswith(prefix + ".") for prefix in _ALLOWED_BACKEND_PREFIXES)
-    rejected_name = any(word in module_name or word in class_name for word in ("plaintext", "null", "fail", "keyrings.alt"))
+    rejected_name = any(
+        word in module_name or word in class_name for word in ("plaintext", "null", "fail", "keyrings.alt")
+    )
     if not allowed or rejected_name or priority <= 0:
         raise RuntimeError(
             "No supported secure OS credential vault is active. Configure Windows Credential Manager, "
