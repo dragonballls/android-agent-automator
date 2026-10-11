@@ -300,7 +300,7 @@ class Launcher:
         ttk.Button(action_row, text="Clear Selection", command=self.clear_device_selection).pack(side="left", padx=6)
         ttk.Label(
             action_row,
-            text="One saved schedule per phone; selected phones run independently in parallel.",
+            text="Selected phones run in parallel.",
             foreground="#555555",
         ).pack(side="right")
 
