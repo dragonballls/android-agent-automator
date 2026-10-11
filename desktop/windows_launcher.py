@@ -719,10 +719,18 @@ def main(argv: list[str] | None = None) -> int:
 
             bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
             if not (bundle_root / "frontend" / "dist" / "index.html").is_file():
+                (LOG_DIR / "self-test.txt").write_text(
+                    "self-test failed: bundled frontend index.html is missing\\n", encoding="utf-8"
+                )
                 return 3
             if not any(getattr(route, "path", "") == "/api/health" for route in app.routes):
+                (LOG_DIR / "self-test.txt").write_text(
+                    "self-test failed: health route was not registered\\n", encoding="utf-8"
+                )
                 return 4
-            (LOG_DIR / "self-test.txt").write_text("launcher import and bundled dashboard OK\n", encoding="utf-8")
+            (LOG_DIR / "self-test.txt").write_text(
+                "launcher import and bundled dashboard OK\\n", encoding="utf-8"
+            )
             return 0
         except Exception as exc:
             (LOG_DIR / "self-test.txt").write_text(f"launcher import failed: {type(exc).__name__}\n", encoding="utf-8")
