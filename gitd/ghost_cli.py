@@ -23,7 +23,7 @@ from gitd.ghostcli import run as grun
 from gitd.ghostcli import wizard as gwiz
 
 # Subcommands whose first token routes away from the prompt path.
-_LEGACY = ("up", "doctor", "login", "skill")  # handled by gitd.cli
+_LEGACY = ("up", "doctor", "login", "skill", "unlock-pin")  # handled by gitd.cli
 _LOCAL = ("devices", "setup", "configure", "config", "mcp")  # handled here
 RESERVED = (*_LEGACY, *_LOCAL, "help")
 
@@ -170,6 +170,7 @@ _HELP = """ghost — give any AI agent an Android/iOS body.
   ghost config get|set|path     Read/write ~/.ghost/config.toml
   ghost mcp install --client claude-code|cursor|codex|opencode|agy
   ghost up | doctor | login | skill …    (existing commands)
+  ghost unlock-pin set|status|remove <serial>  Securely manage a local Android PIN
 """
 
 
