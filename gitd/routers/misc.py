@@ -100,7 +100,10 @@ def api_server_restart():
 
     def _restart():
         time.sleep(0.5)
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        # In a frozen Windows EXE, argv[0] is already the executable path.
+        # Reusing it as an argument would invoke "GhostLauncher.exe GhostLauncher.exe".
+        args = [sys.executable, *sys.argv[1:]] if getattr(sys, "frozen", False) else [sys.executable, *sys.argv]
+        os.execv(sys.executable, args)
 
     threading.Thread(target=_restart, daemon=True).start()
     return {"ok": True, "message": "Restarting..."}
