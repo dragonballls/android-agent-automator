@@ -207,3 +207,22 @@ Plus a dispatch handler. See existing providers as reference. PRs welcome — es
 - [MCP Server](../mcp-server/) — the other direction: agents that connect **to** Ghost
 - [Dashboard](../dashboard/) — pick and switch providers in the UI
 - [Getting Started: Installation](../../getting-started/installation/) — set up Ghost + your first provider
+
+## Owner-authorized Android lock-screen recovery
+
+For Android devices that are already authorized in ADB, Ghost can wake a locked phone and enter a numeric PIN that you explicitly enrolled in your computer's OS credential vault. The PIN is never sent to Gemini or included in tool arguments, chat history, logs, or an ADB command line. This is not a lock-screen bypass: Android still evaluates the PIN normally.
+
+Enroll it from an interactive terminal on the computer running Ghost:
+
+```bash
+ghost unlock-pin set <device-serial>
+ghost unlock-pin status <device-serial>
+```
+
+Enrollment requires a connected, ADB-authorized device, confirmation, and hidden PIN entry. Supported secure stores are Windows Credential Manager, macOS Keychain, and supported Linux Secret Service/KWallet backends. If no supported OS vault is active, enrollment fails closed instead of writing a plaintext file. Remove the saved PIN with:
+
+```bash
+ghost unlock-pin remove <device-serial>
+```
+
+When the owner has authorized the current task and the lock screen blocks it, the agent can call its Android-only `unlock_device` tool. It makes one attempt and checks Android's reported lock state before continuing. A failed attempt is not retried automatically. iOS, biometric-only unlock, unsupported device lock-state reporting, and non-numeric passcodes require manual unlock. Never commit a PIN or paste it into a chat prompt.
