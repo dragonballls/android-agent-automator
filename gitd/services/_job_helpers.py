@@ -8,6 +8,7 @@ finishing / archiving / enqueuing jobs, and shared path constants.
 import json
 import logging
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +28,11 @@ _BOT_DEVICE = settings.default_device
 # Resolve script paths through this helper so scheduler works in both
 # public-only and premium-installed setups.
 _PREMIUM_DIR = _SCRIPT_DIR.parent.parent / "internal" / "ghost_premium"
+
+
+def scheduled_job_log_path(job_id: int) -> str:
+    """Return a per-user temporary log path on Windows and POSIX."""
+    return str(Path(tempfile.gettempdir()) / f"sched_job_{int(job_id)}.log")
 
 
 def resolve_script(relpath: str) -> Path:
@@ -57,7 +63,7 @@ def _now() -> str:
 
 def _parse_live_stats(job: dict) -> str:
     """Parse a running job's log file for live progress stats."""
-    log_path = job.get("log_file") or f"/tmp/sched_job_{job['id']}.log"
+    log_path = job.get("log_file") or scheduled_job_log_path(job["id"])
     try:
         with open(log_path, "r", errors="replace") as f:
             lines = f.readlines()
@@ -129,7 +135,7 @@ def _parse_partial_crawl(lines: list[str]) -> str:
 
 
 def _read_job_log_lines(jid: int, entry: dict | None = None, log_path: str | None = None) -> list[str]:
-    log_path = log_path or (entry or {}).get("log_path") or f"/tmp/sched_job_{jid}.log"
+    log_path = log_path or (entry or {}).get("log_path") or scheduled_job_log_path(jid)
     try:
         with open(log_path, "r", errors="replace") as lf:
             return lf.readlines()
