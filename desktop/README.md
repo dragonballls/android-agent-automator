@@ -17,6 +17,12 @@ The local background service runs the scheduler and keeps saved tasks in the app
 
 The computer must be awake and signed in at the scheduled time, and the phone must remain connected. A task requiring biometric approval or an unsupported unlock flow can pause for manual help. A failed PIN attempt is not retried automatically.
 
+## Multi-step and repetitive tasks
+
+In the task instructions, describe the finish condition and the order of the steps. For example: “Finish each setup step, verify it on screen, then open the next page. Repeat the safe setup action only while the goal remains incomplete.” The agent checks the visible state after actions, advances after a stage is verified, and reports a blocker rather than looping when repeated attempts make no progress. One run is bounded by the agent's tool-turn limit, so exceptionally long workflows may need to be split into saved tasks.
+
+The agent does not fabricate activity or automate rewarded-ad viewing/clicking or reward-claim loops intended to simulate human engagement.
+
 ## Local files
 
 On Windows, user settings, the database, and logs are kept under:
