@@ -11,6 +11,7 @@ import threading
 import time
 
 _SERVICE_NAME = "ghost-in-the-droid/android-device-pin"
+_ATTEMPT_SERVICE_NAME = "ghost-in-the-droid/android-device-pin-attempt-guard"
 _ALLOWED_BACKEND_PREFIXES = (
     "keyring.backends.windows",
     "keyring.backends.macos",
@@ -21,7 +22,6 @@ _ALLOWED_BACKEND_PREFIXES = (
 )
 _MIN_PIN_LENGTH = 4
 _MAX_PIN_LENGTH = 16
-_pin_attempt_blocked: set[str] = set()
 _unlock_guard = threading.Lock()
 
 
@@ -71,6 +71,15 @@ def _keyring_module():
     return keyring
 
 
+def _clear_attempt_guard(keyring, serial: str) -> None:
+    """Clear the persistent no-repeat guard only after verified success or explicit local re-enrollment."""
+    try:
+        if keyring.get_password(_ATTEMPT_SERVICE_NAME, serial):
+            keyring.delete_password(_ATTEMPT_SERVICE_NAME, serial)
+    except Exception as exc:
+        raise RuntimeError("The OS credential vault could not clear the unlock-attempt guard.") from exc
+
+
 def store_pin(serial: str, pin: str) -> None:
     """Store a numeric PIN in the supported OS vault, scoped to one ADB serial."""
     serial = _validate_serial(serial)
@@ -78,7 +87,7 @@ def store_pin(serial: str, pin: str) -> None:
     keyring = _keyring_module()
     try:
         keyring.set_password(_SERVICE_NAME, serial, pin)
-        _pin_attempt_blocked.discard(serial)
+        _clear_attempt_guard(keyring, serial)
     except Exception as exc:
         raise RuntimeError("The OS credential vault could not save the PIN.") from exc
 
@@ -100,9 +109,10 @@ def remove_pin(serial: str) -> bool:
     try:
         existing = keyring.get_password(_SERVICE_NAME, serial)
         if not existing:
+            _clear_attempt_guard(keyring, serial)
             return False
         keyring.delete_password(_SERVICE_NAME, serial)
-        _pin_attempt_blocked.discard(serial)
+        _clear_attempt_guard(keyring, serial)
         return True
     except Exception as exc:
         raise RuntimeError("The OS credential vault could not remove the device entry.") from exc
@@ -176,15 +186,14 @@ def _unlock_device_once(device: str) -> str:
             "ERROR: Could not reliably detect this device's lock state. No PIN was entered. "
             "Check the authorized ADB connection and try again."
         )
-    if serial in _pin_attempt_blocked:
-        return (
-            "ERROR: A previous PIN attempt for this device did not verify. No new attempt will be made. "
-            "After checking the PIN, re-enroll it locally with `ghost unlock-pin set <device-serial>` "
-            "to explicitly authorize another attempt."
-        )
-
     try:
         keyring = _keyring_module()
+        if keyring.get_password(_ATTEMPT_SERVICE_NAME, serial):
+            return (
+                "ERROR: A previous PIN attempt for this device did not verify. No new attempt will be made. "
+                "After checking the PIN, re-enroll it locally with `ghost unlock-pin set <device-serial>` "
+                "to explicitly authorize another attempt."
+            )
         pin = keyring.get_password(_SERVICE_NAME, serial)
         if not pin:
             return (
@@ -210,9 +219,15 @@ def _unlock_device_once(device: str) -> str:
             timeout=5,
         )
         time.sleep(0.4)
-        # Latch the device before entering any digits. A failed or uncertain
-        # attempt requires explicit local re-enrollment before another attempt.
-        _pin_attempt_blocked.add(serial)
+        # Persist the no-repeat guard before the first digit, so a crash/restart
+        # cannot silently start a second attempt using the same enrollment.
+        try:
+            keyring.set_password(_ATTEMPT_SERVICE_NAME, serial, "blocked")
+        except Exception:
+            return (
+                "ERROR: Could not persist the unlock-attempt guard in the OS credential vault. "
+                "No PIN digits were entered."
+            )
         # Send each digit as a separate key event: never place the PIN in an
         # ADB command argument, log line, agent message, or tool result.
         for digit in pin:
@@ -227,7 +242,13 @@ def _unlock_device_once(device: str) -> str:
 
     locked_after = _read_keyguard_state(dev)
     if locked_after is False:
-        _pin_attempt_blocked.discard(serial)
+        try:
+            _clear_attempt_guard(keyring, serial)
+        except RuntimeError:
+            return (
+                "Unlocked successfully and verified, but the OS credential vault could not clear the "
+                "no-repeat guard. Re-enroll the PIN locally before another locked-screen attempt."
+            )
         return "Unlocked successfully and verified through Android's reported lock state."
     if locked_after is True:
         return (
