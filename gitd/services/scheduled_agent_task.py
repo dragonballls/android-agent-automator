@@ -4,6 +4,7 @@ This module is also invoked as a child process by the frozen Windows launcher.
 Only the task description/provider/model/device are passed; API and device PIN
 credentials remain in the OS credential vault / process environment.
 """
+
 from __future__ import annotations
 
 import base64
@@ -62,7 +63,10 @@ def run_payload(encoded: str) -> int:
                     name = event.get("name") or event.get("tool") or event.get("tool_name") or "device action"
                     print(f"\n[saved-task] action: {name}", flush=True)
                 elif event_type == "error":
-                    print(f"\n[saved-task] ERROR: {event.get('content') or event.get('error') or 'unknown error'}", flush=True)
+                    print(
+                        f"\n[saved-task] ERROR: {event.get('content') or event.get('error') or 'unknown error'}",
+                        flush=True,
+                    )
                     exit_code = 1
                 elif event_type == "done":
                     print("\n[saved-task] finished", flush=True)
