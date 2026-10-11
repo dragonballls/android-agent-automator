@@ -15,7 +15,11 @@ The GitHub Actions workflow builds a single-file `GhostLauncher.exe` and publish
 7. Before using Gemini, read the privacy note below. For the first test, put the phone on a non-sensitive screen such as the home screen.
 8. Open **2 Create task**. Enter a name, instructions, and daily time, then click **Save daily task**. The default AI provider is preselected; open **Advanced AI model options** only to change provider/model. Select multiple phones from the **Connect phone** tab when needed. Saving creates one enabled daily schedule per selected phone.
 
-## Automatic reconnection\n\nAfter a phone has been paired successfully over Wi-Fi, keep Android **Wireless debugging** enabled and the phone and PC on the same trusted local network. The launcher periodically checks ADB's advertised secure connect services and reconnects phones that already trust this PC. This does not bypass Android's first-time pairing or USB-debugging approval; it also cannot reconnect a phone that is offline, asleep with wireless debugging unavailable, or on another network. Phone Link is separate and is not used as the ADB control channel.\n\n## First-device smoke test (read-only)
+## Automatic reconnection
+
+After a phone has been paired successfully over Wi-Fi, keep Android **Wireless debugging** enabled and the phone and PC on the same trusted local network. The launcher periodically checks ADB's advertised secure connect services and reconnects phones that already trust this PC. This does not bypass Android's first-time pairing or USB-debugging approval; it also cannot reconnect a phone that is offline, asleep with wireless debugging unavailable, or on another network. Phone Link is separate and is not used as the ADB control channel.
+
+## First-device smoke test (read-only)
 
 Run this on **one phone first**, before creating multi-phone schedules:
 
