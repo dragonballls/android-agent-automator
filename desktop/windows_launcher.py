@@ -224,6 +224,7 @@ class Launcher:
         controls = ttk.Frame(outer)
         controls.pack(fill="x", pady=(2, 8))
         ttk.Button(controls, text="Start / Check Service", command=self.ensure_service).pack(side="left", padx=(0, 6))
+        ttk.Button(controls, text="Restart Service", command=self.restart_service).pack(side="left", padx=6)
         ttk.Button(controls, text="Open Control Center", command=self.open_dashboard).pack(side="left", padx=6)
         ttk.Button(controls, text="Refresh Tasks", command=self.refresh_tasks).pack(side="left", padx=6)
         ttk.Button(controls, text="Configure Gemini Key", command=self.configure_gemini_key).pack(side="left", padx=6)
@@ -382,6 +383,56 @@ class Launcher:
             messagebox.showerror(APP_NAME, f"Service exited. Check {LOG_DIR / 'server.log'}")
             return
         self.root.after(500, self._poll_server_start, attempt + 1)
+
+    def restart_service(self):
+        if not messagebox.askyesno(
+            APP_NAME,
+            "Restart the local service now? Any task currently running may be interrupted. "
+            "Saved tasks and daily schedules will remain stored.",
+        ):
+            return
+        stopped = False
+        # First stop the child this launcher itself started, if it still exists.
+        if self.server_process and self.server_process.poll() is None:
+            try:
+                self.server_process.terminate()
+                self.server_process.wait(timeout=5)
+                stopped = True
+            except Exception:
+                try:
+                    self.server_process.kill()
+                    stopped = True
+                except Exception:
+                    pass
+        # Also support a server that was started by Windows login startup or a
+        # previous launcher window; only stop processes with this explicit mode.
+        try:
+            import psutil
+
+            current_pid = os.getpid()
+            for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+                try:
+                    if proc.info["pid"] == current_pid:
+                        continue
+                    name = (proc.info.get("name") or "").lower()
+                    cmdline = proc.info.get("cmdline") or []
+                    joined = " ".join(str(part) for part in cmdline).lower()
+                    is_packaged_server = name == "ghostlauncher.exe" and "--background" in joined
+                    is_source_server = "windows_launcher.py" in joined and "--background" in joined
+                    if is_packaged_server or is_source_server:
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=5)
+                        except psutil.TimeoutExpired:
+                            proc.kill()
+                        stopped = True
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+        except Exception:
+            pass
+        self.server_process = None
+        self.status_var.set("Restarting service…")
+        self.root.after(800 if stopped else 100, self.ensure_service)
 
     def open_dashboard(self):
         self.ensure_service(lambda: webbrowser.open(_api_base() + "/"))
@@ -647,6 +698,21 @@ def main(argv: list[str] | None = None) -> int:
         return run_background_service()
     if len(args) == 2 and args[0] == "--run-scheduled-agent-task":
         return run_scheduled_task(args[1])
+    if args and args[0] == "--self-test":
+        load_api_keys_from_vault()
+        try:
+            from gitd.app import app
+
+            bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+            if not (bundle_root / "frontend" / "dist" / "index.html").is_file():
+                return 3
+            if not any(getattr(route, "path", "") == "/api/health" for route in app.routes):
+                return 4
+            (LOG_DIR / "self-test.txt").write_text("launcher import and bundled dashboard OK\n", encoding="utf-8")
+            return 0
+        except Exception as exc:
+            (LOG_DIR / "self-test.txt").write_text(f"launcher import failed: {type(exc).__name__}\n", encoding="utf-8")
+            return 2
     root = tk.Tk()
     Launcher(root)
     root.mainloop()
