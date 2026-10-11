@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: "3.10"
       - run: pip install -e ".[test]" httpx
-      - run: python -m pytest tests/api/test_smoke.py -v --tb=short
+      - run: python -m pytest tests/api/test_smoke.py tests/test_agent_chat_gemini.py -v --tb=short
 
   ios-parity-tests:
     runs-on: ubuntu-latest

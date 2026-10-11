@@ -44,6 +44,12 @@ You can call multiple tools in sequence. After each tool call, I'll show you the
 - Use element indices from the tree for precise tapping (tap_element)
 - After actions, verify results with get_screen_tree
 - Use only the tools listed above; unavailable platform-specific tools have been filtered out
+- Preserve device security: do not guess PINs/passwords, bypass biometrics, or circumvent authentication. If the phone requires secure unlock, pause and ask the owner to unlock it.
+- Use visible lock-screen or notification controls only when the OS permits them and the user explicitly requested the action.
+- Do not fabricate photos, proof, check-ins, or submissions, and do not automate rewarded-ad viewing/clicking or reward-claim loops meant to simulate human engagement.
+- Preserve device security: do not guess PINs/passwords, bypass biometrics, or circumvent authentication. If the phone requires secure unlock, pause and ask the owner to unlock it.
+- Use visible lock-screen or notification controls only when the OS permits them and the user explicitly requested the action.
+- Do not fabricate photos, proof, check-ins, or submissions, and do not automate rewarded-ad viewing/clicking or reward-claim loops meant to simulate human engagement.
 - Keep responses concise"""
 
 ANTHROPIC_SYSTEM = """You are a mobile automation agent with full control over one connected mobile device.
@@ -64,6 +70,7 @@ PROVIDERS = {
     "claude-code": {"label": "Claude Code (free)", "models": ["sonnet", "opus", "haiku"]},
     "anthropic": {"label": "Claude API", "models": ["claude-sonnet-4-20250514", "claude-opus-4-20250514"]},
     "openrouter": {"label": "OpenRouter", "models": ["anthropic/claude-sonnet-4", "google/gemini-2.5-pro"]},
+    "gemini": {"label": "Google Gemini API", "models": ["gemini-3.8-flash", "gemini-3.1-pro-preview"]},
     "ollama": {
         "label": "Ollama (local)",
         "models": [
@@ -427,6 +434,8 @@ def chat_turn(session: ChatSession, user_message: str):
         yield from chat_claude_code(session, user_message)
     elif provider == "openrouter":
         yield from _chat_openrouter(session, user_message)
+    elif provider == "gemini":
+        yield from _chat_gemini(session, user_message)
     elif provider == "vllm":
         yield from _chat_vllm(session, user_message)
     elif provider == "ollama":
@@ -577,26 +586,48 @@ def _chat_anthropic(session: ChatSession, user_message: str):
     yield {"type": "done"}
 
 
-# ── OpenRouter ───────────────────────────────────────────────────────────────
+# ── OpenAI-compatible cloud providers ────────────────────────────────────────
 
 
 def _chat_openrouter(session: ChatSession, user_message: str):
-    """Use OpenRouter with OpenAI-compatible tool calling.
+    """Use OpenRouter with OpenAI-compatible multi-turn tool calling."""
+    yield from _chat_openai_compatible(session, user_message, provider="openrouter")
 
-    Multi-turn agent loop (same shape as _chat_vllm): feed each tool result
-    back to the model until it answers without tool calls or MAX_TURNS.
-    """
+
+def _chat_gemini(session: ChatSession, user_message: str):
+    """Use Google's Gemini API through its OpenAI-compatible endpoint."""
+    yield from _chat_openai_compatible(session, user_message, provider="gemini")
+
+
+def _chat_openai_compatible(session: ChatSession, user_message: str, *, provider: str):
+    """Run a bounded tool-calling loop on an OpenAI-compatible cloud provider."""
     from openai import OpenAI
 
     from gitd.config import settings
 
+    if provider == "gemini":
+        api_key = os.environ.get("GEMINI_API_KEY") or settings.gemini_api_key or ""
+        base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+        default_model = "gemini-3.8-flash"
+        if not api_key.strip():
+            yield {
+                "type": "error",
+                "content": "Gemini API key is missing. Set GEMINI_API_KEY in your .env file or environment, then restart the backend.",
+            }
+            yield {"type": "done"}
+            return
+    elif provider == "openrouter":
+        api_key = os.environ.get("OPENROUTER_API_KEY") or settings.openrouter_api_key or ""
+        base_url = "https://openrouter.ai/api/v1"
+        default_model = "anthropic/claude-sonnet-4"
+    else:
+        yield {"type": "error", "content": f"Unsupported OpenAI-compatible provider: {provider}"}
+        yield {"type": "done"}
+        return
+
     session.messages.append(ChatMessage(role="user", content=user_message))
 
-    client = OpenAI(
-        api_key=os.environ.get("OPENROUTER_API_KEY", settings.openrouter_api_key or ""),
-        base_url="https://openrouter.ai/api/v1",
-    )
-
+    client = OpenAI(api_key=api_key, base_url=base_url)
     oai_tools = openai_tools_for_device(session.device)
 
     context = ""
@@ -612,7 +643,7 @@ def _chat_openrouter(session: ChatSession, user_message: str):
         {"role": "user", "content": f"{context}Device: {session.device}\n\n{user_message}"},
     ]
 
-    model = session.model or "anthropic/claude-sonnet-4"
+    model = session.model or default_model
 
     for _turn in range(MAX_TURNS):
         try:

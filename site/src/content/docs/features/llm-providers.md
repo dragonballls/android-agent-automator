@@ -5,16 +5,17 @@ description: Ghost's agent-chat works with any LLM — Claude, GPT, Gemini, Llam
 
 Ghost's built-in agent loop is model-agnostic. Point it at a cloud API, run Ollama on your laptop, or run the model **on the phone itself**. Same tools, same skills, same interface — just swap the brain.
 
-## The 6 providers
+## The 7 providers
 
 | # | Provider | Where it runs | Best for | Setup |
 |---|---|---|---|---|
 | 1 | **[Claude Code](https://claude.com/claude-code)** | Your machine (via CLI) | Free daily driver, Sonnet/Opus/Haiku | `claude` CLI installed |
 | 2 | **[Anthropic API](https://docs.anthropic.com/)** | Anthropic cloud | Latest Claude 4 Sonnet + Opus with full control | `ANTHROPIC_API_KEY` |
-| 3 | **[OpenRouter](https://openrouter.ai/)** | Cloud multiplexer | Any model — GPT, Gemini, DeepSeek, Grok, Hermes... | `OPENROUTER_API_KEY` |
-| 4 | **[Ollama](https://ollama.com/)** | Your machine | Local models, no cloud, cheap iteration | Ollama installed |
-| 5 | **On-device** ⭐ | The phone itself | 100% offline, no data leaves the device | Ghost app installed |
-| 6 | **[vLLM](https://docs.vllm.ai/)** | Your GPU / self-hosted | Full-precision open-source models at speed | vLLM server URL |
+| 3 | **Google Gemini API** | Google AI cloud | Direct Gemini tool-calling without a router | `GEMINI_API_KEY` |
+| 4 | **[OpenRouter](https://openrouter.ai/)** | Cloud multiplexer | Any model — GPT, Gemini, DeepSeek, Grok, Hermes... | `OPENROUTER_API_KEY` |
+| 5 | **[Ollama](https://ollama.com/)** | Your machine | Local models, no cloud, cheap iteration | Ollama installed |
+| 6 | **On-device** ⭐ | The phone itself | 100% offline, no data leaves the device | Ghost app installed |
+| 7 | **[vLLM](https://docs.vllm.ai/)** | Your GPU / self-hosted | Full-precision open-source models at speed | vLLM server URL |
 
 ## Pick your brain
 
@@ -40,6 +41,20 @@ export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 Provider `anthropic` unlocks [Claude Sonnet 4](https://www.anthropic.com/claude/sonnet) and [Opus 4](https://www.anthropic.com/claude/opus) directly. Recommended for anything you'd bill a customer for.
+
+### ✨ Direct Google Gemini API
+
+Use Gemini directly with a Google AI Studio API key, without routing requests through OpenRouter. This uses Google's documented OpenAI-compatible endpoint and the existing OpenAI client, so custom device tool calls use the same bounded multi-turn loop.
+
+Create a key in [Google AI Studio](https://aistudio.google.com/apikey), then add it to your local \`.env\` file:
+
+\`\`\`bash
+GEMINI_API_KEY=your-gemini-api-key
+\`\`\`
+
+The default model is \`gemini-3.8-flash\`; the provider selector also offers \`gemini-3.1-pro-preview\`. You can select another compatible Gemini API model by entering its exact model ID in the model selector. See Google's [model list](https://ai.google.dev/gemini-api/docs/models) for current availability.
+
+The agent uses the existing phone tools (screen inspection, tap/swipe/type, and app navigation) and returns tool results to Gemini for subsequent steps. The API key stays in the backend environment and should never be put in browser code or committed to Git.
 
 ### 🌐 Any model — [OpenRouter](https://openrouter.ai/)
 
@@ -161,6 +176,7 @@ Environment variables:
 ```bash
 # Cloud APIs
 ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=your-gemini-api-key
 OPENROUTER_API_KEY=sk-or-v1-...
 
 # Local runtimes
