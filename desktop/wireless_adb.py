@@ -156,7 +156,7 @@ def reconnect_paired_devices(
     endpoints: list[str] = []
     for line in (discovered.stdout or "").splitlines():
         fields = line.split()
-        if len(fields) < 3 or "_adb-tls-connect._tcp" not in fields:
+        if len(fields) < 3 or not any("_adb-tls-connect._tcp" in field for field in fields[:-1]):
             continue
         endpoint = _normalise_discovered_endpoint(fields[-1])
         if endpoint and endpoint not in endpoints:
