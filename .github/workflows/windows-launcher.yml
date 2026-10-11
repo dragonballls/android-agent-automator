@@ -48,7 +48,7 @@ jobs:
       - name: Package single-file Windows launcher
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name GhostLauncher --collect-all keyring --collect-all uvicorn --collect-submodules gitd --add-data "frontend\dist;frontend\dist" --add-data "gitd;gitd" desktop\windows_launcher.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name GhostLauncher --collect-all keyring --collect-all uvicorn --collect-all fastapi --collect-all starlette --collect-submodules gitd --add-data "frontend\dist;frontend\dist" --add-data "gitd;gitd" desktop\windows_launcher.py
           if (!(Test-Path "dist\GhostLauncher.exe")) {
             throw "PyInstaller did not produce dist\GhostLauncher.exe"
           }
