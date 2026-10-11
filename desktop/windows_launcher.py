@@ -196,13 +196,13 @@ class Launcher:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title(f"{APP_NAME} — Windows Launcher")
-        self.root.geometry("900x760")
-        self.root.minsize(780, 650)
+        self.root.geometry("900x840")
+        self.root.minsize(780, 740)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.server_process: subprocess.Popen | None = None
         self.startup_enabled = tk.BooleanVar(value=self._is_startup_enabled())
         self.status_var = tk.StringVar(value="Service not checked")
-        self.device_var = tk.StringVar(value="")
+        self.available_devices: list[str] = []
         self.task_name_var = tk.StringVar(value="")
         self.daily_time_var = tk.StringVar(value="09:00")
         self.provider_var = tk.StringVar(value="gemini")
@@ -250,43 +250,63 @@ class Launcher:
         task_frame.columnconfigure(3, weight=1)
 
         ttk.Label(task_frame, text="Task name").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=4)
-        ttk.Entry(task_frame, textvariable=self.task_name_var).grid(row=0, column=1, sticky="ew", padx=(0, 14), pady=4)
-        ttk.Label(task_frame, text="Phone serial").grid(row=0, column=2, sticky="w", padx=(0, 6), pady=4)
-        self.device_combo = ttk.Combobox(task_frame, textvariable=self.device_var)
-        self.device_combo.grid(row=0, column=3, sticky="ew", pady=4)
+        ttk.Entry(task_frame, textvariable=self.task_name_var).grid(
+            row=0, column=1, columnspan=3, sticky="ew", pady=4
+        )
 
-        ttk.Label(task_frame, text="AI provider").grid(row=1, column=0, sticky="w", padx=(0, 6), pady=4)
+        ttk.Label(task_frame, text="Target phones\n(Ctrl/Shift-select)").grid(
+            row=1, column=0, sticky="nw", padx=(0, 6), pady=4
+        )
+        device_frame = ttk.Frame(task_frame)
+        device_frame.grid(row=1, column=1, columnspan=3, sticky="ew", pady=4)
+        self.device_listbox = tk.Listbox(
+            device_frame, selectmode=tk.EXTENDED, exportselection=False, height=4, font=("Segoe UI", 9)
+        )
+        device_scrollbar = ttk.Scrollbar(device_frame, orient="vertical", command=self.device_listbox.yview)
+        self.device_listbox.configure(yscrollcommand=device_scrollbar.set)
+        self.device_listbox.pack(side="left", fill="both", expand=True)
+        device_scrollbar.pack(side="right", fill="y")
+
+        ttk.Label(task_frame, text="AI provider").grid(row=2, column=0, sticky="w", padx=(0, 6), pady=4)
         self.provider_combo = ttk.Combobox(
             task_frame, textvariable=self.provider_var, values=list(self._provider_data), state="readonly"
         )
-        self.provider_combo.grid(row=1, column=1, sticky="ew", padx=(0, 14), pady=4)
+        self.provider_combo.grid(row=2, column=1, sticky="ew", padx=(0, 14), pady=4)
         self.provider_combo.bind("<<ComboboxSelected>>", self.on_provider_changed)
-        ttk.Label(task_frame, text="Model ID").grid(row=1, column=2, sticky="w", padx=(0, 6), pady=4)
+        ttk.Label(task_frame, text="Model ID").grid(row=2, column=2, sticky="w", padx=(0, 6), pady=4)
         self.model_combo = ttk.Combobox(task_frame, textvariable=self.model_var, values=self._provider_data["gemini"])
-        self.model_combo.grid(row=1, column=3, sticky="ew", pady=4)
+        self.model_combo.grid(row=2, column=3, sticky="ew", pady=4)
 
-        ttk.Label(task_frame, text="Daily run time (24-hour)").grid(row=2, column=0, sticky="w", padx=(0, 6), pady=4)
-        ttk.Entry(task_frame, textvariable=self.daily_time_var, width=12).grid(row=2, column=1, sticky="w", padx=(0, 14), pady=4)
-        ttk.Label(task_frame, text="Local time • repeats every day").grid(row=2, column=2, columnspan=2, sticky="w", pady=4)
+        ttk.Label(task_frame, text="Daily run time (24-hour)").grid(row=3, column=0, sticky="w", padx=(0, 6), pady=4)
+        ttk.Entry(task_frame, textvariable=self.daily_time_var, width=12).grid(
+            row=3, column=1, sticky="w", padx=(0, 14), pady=4
+        )
+        ttk.Label(task_frame, text="Local time • repeats every day").grid(
+            row=3, column=2, columnspan=2, sticky="w", pady=4
+        )
 
-        ttk.Label(task_frame, text="What should the agent do?").grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 4))
+        ttk.Label(task_frame, text="What should the agent do?").grid(
+            row=4, column=0, columnspan=4, sticky="w", pady=(8, 4)
+        )
         self.prompt_text = tk.Text(task_frame, height=4, wrap="word", font=("Segoe UI", 10))
-        self.prompt_text.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(0, 8))
+        self.prompt_text.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(0, 8))
         self.prompt_text.insert("1.0", "Open the app I specify and complete this authorized task: ")
         action_row = ttk.Frame(task_frame)
-        action_row.grid(row=5, column=0, columnspan=4, sticky="ew")
+        action_row.grid(row=6, column=0, columnspan=4, sticky="ew")
         ttk.Button(action_row, text="Save Daily Task", command=self.save_task).pack(side="left")
         ttk.Button(action_row, text="Refresh Connected Phones", command=self.refresh_devices).pack(side="left", padx=8)
+        ttk.Button(action_row, text="Select All Phones", command=self.select_all_devices).pack(side="left", padx=6)
+        ttk.Button(action_row, text="Clear Selection", command=self.clear_device_selection).pack(side="left", padx=6)
         ttk.Label(
             action_row,
-            text="Saved schedules remain on this computer; the background service must be running.",
+            text="One saved schedule per phone; selected phones run independently in parallel.",
             foreground="#555555",
         ).pack(side="right")
 
         saved_frame = ttk.LabelFrame(outer, text="Saved daily tasks", padding=10)
         saved_frame.pack(fill="both", expand=True)
         columns = ("name", "device", "time", "enabled", "next")
-        self.tree = ttk.Treeview(saved_frame, columns=columns, show="headings", height=9, selectmode="browse")
+        self.tree = ttk.Treeview(saved_frame, columns=columns, show="headings", height=9, selectmode="extended")
         for key, title, width in (
             ("name", "Task", 220),
             ("device", "Phone", 170),
@@ -488,9 +508,17 @@ class Launcher:
                     serial = item.get("serial") or item.get("device") or item.get("ref")
                     if serial and item.get("platform", "android") in ("android", "ios"):
                         serials.append(str(serial))
-            self.device_combo.configure(values=serials)
-            if not self.device_var.get() and serials:
-                self.device_var.set(serials[0])
+            previous_selection = {
+                self.device_listbox.get(index) for index in self.device_listbox.curselection()
+            }
+            self.available_devices = serials
+            self.device_listbox.delete(0, tk.END)
+            for index, serial in enumerate(serials):
+                self.device_listbox.insert(tk.END, serial)
+                if serial in previous_selection:
+                    self.device_listbox.selection_set(index)
+            if not self.device_listbox.curselection() and serials:
+                self.device_listbox.selection_set(0)
         except Exception:
             pass
 
@@ -528,12 +556,12 @@ class Launcher:
     def save_task(self):
         prompt = self.prompt_text.get("1.0", "end").strip()
         name = self.task_name_var.get().strip() or (prompt[:45] + ("…" if len(prompt) > 45 else ""))
-        device = self.device_var.get().strip()
+        devices = [self.device_listbox.get(index) for index in self.device_listbox.curselection()]
         provider = self.provider_var.get().strip()
         model = self.model_var.get().strip()
         daily_time = self.daily_time_var.get().strip()
-        if not device:
-            messagebox.showwarning(APP_NAME, "Connect your phone with Android ADB or configure the target device first.")
+        if not devices:
+            messagebox.showwarning(APP_NAME, "Connect and select at least one target phone.")
             return
         if not prompt or len(prompt) > 5000:
             messagebox.showwarning(APP_NAME, "Enter a task description between 1 and 5000 characters.")
@@ -546,36 +574,59 @@ class Launcher:
         if not provider:
             messagebox.showwarning(APP_NAME, "Choose an AI provider.")
             return
-        self.ensure_service(lambda: self._post_new_task(name, prompt, device, provider, model, daily_time))
+        self.ensure_service(lambda: self._post_new_task(name, prompt, devices, provider, model, daily_time))
 
-    def _post_new_task(self, name: str, prompt: str, device: str, provider: str, model: str, daily_time: str):
-        payload = {
-            "name": name[:100],
-            "job_type": "agent_task",
-            "phone_serial": device,
-            "priority": 2,
-            "schedule_type": "daily",
-            "daily_times": [daily_time],
-            "max_duration_s": 1800,
-            "is_enabled": 1,
-            "config_json": {"prompt": prompt, "provider": provider, "model": model, "source": "windows_launcher"},
-        }
+    def _post_new_task(
+        self, name: str, prompt: str, devices: list[str], provider: str, model: str, daily_time: str
+    ):
+        from gitd.services.multi_device_tasks import build_device_schedule_payloads
+
         try:
-            result = _api_request("/api/schedules", method="POST", payload=payload, timeout=8)
-            if not isinstance(result, dict) or not result.get("ok"):
-                raise RuntimeError("The scheduler did not confirm the saved task.")
-            self.status_var.set(f"Saved daily task #{result.get('id')}: {name}")
-            self.refresh_tasks()
-            if provider == "gemini" and not self._gemini_key_present():
-                messagebox.showinfo(
-                    APP_NAME,
-                    "Task saved. Add a Gemini API key with Configure Gemini Key before its scheduled run.",
-                )
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:800]
-            messagebox.showerror(APP_NAME, f"Could not save the task (HTTP {exc.code}):\n{detail}")
+            payloads = build_device_schedule_payloads(name, prompt, devices, provider, model, daily_time)
+        except ValueError as exc:
+            messagebox.showwarning(APP_NAME, str(exc))
+            return
+
+        created_ids: list[int] = []
+        try:
+            for payload in payloads:
+                result = _api_request("/api/schedules", method="POST", payload=payload, timeout=8)
+                if not isinstance(result, dict) or not result.get("ok") or result.get("id") is None:
+                    raise RuntimeError("The scheduler did not confirm every saved task.")
+                created_ids.append(int(result["id"]))
         except Exception as exc:
-            messagebox.showerror(APP_NAME, f"Could not save the task: {type(exc).__name__}")
+            rollback_failed: list[int] = []
+            for schedule_id in reversed(created_ids):
+                try:
+                    _api_request(f"/api/schedules/{schedule_id}", method="DELETE", timeout=4)
+                except Exception:
+                    rollback_failed.append(schedule_id)
+            if isinstance(exc, urllib.error.HTTPError):
+                detail = exc.read().decode("utf-8", errors="replace")[:800]
+                error = f"Could not save the task for every phone (HTTP {exc.code}):\\n{detail}"
+            else:
+                error = f"Could not save the task for every phone: {type(exc).__name__}"
+            if rollback_failed:
+                error += "\\nSome partial schedules could not be removed: " + ", ".join(map(str, rollback_failed))
+            messagebox.showerror(APP_NAME, error)
+            self.refresh_tasks()
+            return
+
+        count = len(payloads)
+        self.status_var.set(f"Saved daily task on {count} phone{'s' if count != 1 else ''}: {name}")
+        self.refresh_tasks()
+        if provider == "gemini" and not self._gemini_key_present():
+            messagebox.showinfo(
+                APP_NAME,
+                "Task saved. Add a Gemini API key with Configure Gemini Key before its scheduled run.",
+            )
+
+    def select_all_devices(self):
+        if self.device_listbox.size():
+            self.device_listbox.selection_set(0, tk.END)
+
+    def clear_device_selection(self):
+        self.device_listbox.selection_clear(0, tk.END)
 
     def _selected_schedule_id(self) -> int | None:
         selected = self.tree.selection()
