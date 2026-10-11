@@ -54,7 +54,7 @@ def test_insecure_file_backends_are_refused(monkeypatch):
 def test_unlock_sends_individual_keyevents_and_verifies_state(monkeypatch):
     pin = "1234"
     _fake_keyring(monkeypatch, pin=pin)
-    monkeypatch.setattr(unlock, "_last_attempt_at", {})
+    monkeypatch.setattr(unlock, "_pin_attempt_blocked", set())
     monkeypatch.setattr(unlock.time, "sleep", lambda _: None)
     states = iter(["mShowingLockscreen=true", "mShowingLockscreen=false"])
     commands = []
@@ -127,7 +127,7 @@ def test_failed_unlock_does_not_retry_automatically(monkeypatch):
     )
 
     assert "still reports the phone locked" in first
-    assert "already made recently" in second
+    assert "previous PIN attempt" in second
     assert key_events_after_second == key_events_after_first
 
 
