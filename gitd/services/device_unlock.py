@@ -11,12 +11,12 @@ import time
 
 _SERVICE_NAME = "ghost-in-the-droid/android-device-pin"
 _ALLOWED_BACKEND_PREFIXES = (
-    "keyring.backends.windows.",
-    "keyring.backends.macos.",
-    "keyring.backends.secretservice.",
-    "keyring.backends.kwallet.",
-    "keyring.backends.kdewallet.",
-    "keyring.backends.libsecret.",
+    "keyring.backends.windows",
+    "keyring.backends.macos",
+    "keyring.backends.secretservice",
+    "keyring.backends.kwallet",
+    "keyring.backends.kdewallet",
+    "keyring.backends.libsecret",
 )
 _MIN_PIN_LENGTH = 4
 _MAX_PIN_LENGTH = 16
@@ -55,7 +55,7 @@ def _keyring_module():
     except Exception as exc:
         raise RuntimeError("The OS credential vault could not be initialized.") from exc
 
-    allowed = any(module_name.startswith(prefix) for prefix in _ALLOWED_BACKEND_PREFIXES)
+    allowed = any(module_name == prefix or module_name.startswith(prefix + ".") for prefix in _ALLOWED_BACKEND_PREFIXES)
     rejected_name = any(word in module_name or word in class_name for word in ("plaintext", "null", "fail", "keyrings.alt"))
     if not allowed or rejected_name or priority <= 0:
         raise RuntimeError(
