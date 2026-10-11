@@ -189,7 +189,7 @@ def reconnect_paired_devices(
             continue
         except OSError:
             continue
-        output = ((result.stdout or "") + "\\n" + (result.stderr or "")).lower()
+        output = ((result.stdout or "") + "\n" + (result.stderr or "")).lower()
         if result.returncode == 0 and "failed to connect" not in output and "unable to connect" not in output:
             newly_connected.append(endpoint)
     return newly_connected
