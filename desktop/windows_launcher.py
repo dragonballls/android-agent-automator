@@ -171,6 +171,20 @@ def run_background_service() -> int:
 
 
 def run_scheduled_task(encoded: str) -> int:
+    # Windowed PyInstaller executables may set sys.stdout/sys.stderr to None.
+    # Reattach them to the scheduler log path before the agent emits any output.
+    log_path = os.environ.get("GHOST_SCHEDULE_LOG_FILE")
+    log_handle = None
+    if log_path and (sys.stdout is None or sys.stderr is None):
+        try:
+            Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+            log_handle = open(log_path, "a", encoding="utf-8", buffering=1)
+            if sys.stdout is None:
+                sys.stdout = log_handle
+            if sys.stderr is None:
+                sys.stderr = log_handle
+        except OSError:
+            log_handle = None
     # Imported only after the persistent data directory and OS key store are set up.
     load_api_keys_from_vault()
     from gitd.services.scheduled_agent_task import run_payload
