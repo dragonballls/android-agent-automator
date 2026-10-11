@@ -95,7 +95,7 @@ def test_unlock_sends_individual_keyevents_and_verifies_state(monkeypatch):
 def test_failed_unlock_does_not_retry_automatically(monkeypatch):
     pin = "1234"
     _fake_keyring(monkeypatch, pin=pin)
-    monkeypatch.setattr(unlock, "_last_attempt_at", {})
+    monkeypatch.setattr(unlock, "_pin_attempt_blocked", {})
     monkeypatch.setattr(unlock.time, "sleep", lambda _: None)
     states = iter([
         "mShowingLockscreen=true",
