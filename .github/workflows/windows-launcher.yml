@@ -56,13 +56,24 @@ jobs:
       - name: Verify the packaged executable
         shell: pwsh
         run: |
-          & ".\dist\GhostLauncher.exe" --self-test
-          if ($LASTEXITCODE -ne 0) {
-            $log = Join-Path $env:LOCALAPPDATA "GhostInTheDroid\logs\self-test.txt"
-            if (Test-Path $log) { Get-Content $log }
-            throw "Packaged GhostLauncher self-test failed with exit code $LASTEXITCODE"
+          $exe = (Resolve-Path ".\dist\GhostLauncher.exe").Path
+          $log = Join-Path $env:LOCALAPPDATA "GhostInTheDroid\logs\self-test.txt"
+          Remove-Item $log -ErrorAction SilentlyContinue
+          # Wait for the GUI-subsystem EXE and capture its exit code reliably.
+          $process = Start-Process -FilePath $exe -ArgumentList "--self-test" -Wait -PassThru
+          if (Test-Path $log) {
+            $testLog = Get-Content -Raw $log
+            Write-Host $testLog
+          } else {
+            throw "Packaged GhostLauncher did not write a self-test report (exit code $($process.ExitCode))."
           }
-          $file = Get-Item ".\dist\GhostLauncher.exe"
+          if ($process.ExitCode -ne 0) {
+            throw "Packaged GhostLauncher self-test failed with exit code $($process.ExitCode): $testLog"
+          }
+          if ($testLog -notmatch "launcher import and bundled dashboard OK") {
+            throw "Packaged GhostLauncher self-test did not confirm the bundled dashboard and API: $testLog"
+          }
+          $file = Get-Item $exe
           Write-Host "Verified EXE: $($file.Length) bytes"
 
       - name: Upload Windows EXE
