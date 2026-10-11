@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from gitd.services.scheduled_agent_task import decode_payload
+from gitd.services.scheduled_agent_task import build_execution_prompt, decode_payload
 from gitd.services.job_engine import _build_scheduled_cmd, _skill_config_preflight
 
 
@@ -60,3 +60,13 @@ def test_scheduler_builds_agent_task_command_with_saved_config(monkeypatch):
         "model": "gemini-3.8-flash",
         "device": "serial-123",
     }
+
+def test_saved_task_prompt_repeats_until_verified_completion_then_advances():
+    prompt = build_execution_prompt("Repeat the safe setup steps until complete, then open the next page.")
+
+    assert "do not stop after merely attempting the first action" in prompt
+    assert "repeat the authorized action while the observed screen shows the goal is still incomplete" in prompt
+    assert "finish and verify each stage before moving to the next stage" in prompt
+    assert "three consecutive cycles with no measurable progress" in prompt
+    assert "Do not automate rewarded-ad viewing/clicking" in prompt
+    assert "Repeat the safe setup steps until complete, then open the next page." in prompt
