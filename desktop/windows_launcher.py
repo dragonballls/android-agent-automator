@@ -936,9 +936,11 @@ class Launcher:
     def select_all_devices(self):
         if self.device_listbox.size():
             self.device_listbox.selection_set(0, tk.END)
+        self._update_device_summary()
 
     def clear_device_selection(self):
         self.device_listbox.selection_clear(0, tk.END)
+        self._update_device_summary()
 
     def _selected_schedule_ids(self) -> list[int] | None:
         selected = self.tree.selection()
