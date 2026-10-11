@@ -628,49 +628,64 @@ class Launcher:
     def clear_device_selection(self):
         self.device_listbox.selection_clear(0, tk.END)
 
-    def _selected_schedule_id(self) -> int | None:
+    def _selected_schedule_ids(self) -> list[int] | None:
         selected = self.tree.selection()
         if not selected:
-            messagebox.showinfo(APP_NAME, "Select a saved task first.")
+            messagebox.showinfo(APP_NAME, "Select one or more saved tasks first.")
             return None
         try:
-            return int(selected[0])
+            return [int(item) for item in selected]
         except ValueError:
+            messagebox.showerror(APP_NAME, "The task selection contains an invalid schedule ID.")
             return None
 
     def run_selected(self):
-        sid = self._selected_schedule_id()
-        if sid is None:
+        schedule_ids = self._selected_schedule_ids()
+        if schedule_ids is None:
             return
-        self.ensure_service(lambda: self._schedule_action(sid, "run-now"))
+        self.ensure_service(lambda: self._schedule_action(schedule_ids, "run-now"))
 
     def toggle_selected(self):
-        sid = self._selected_schedule_id()
-        if sid is None:
+        schedule_ids = self._selected_schedule_ids()
+        if schedule_ids is None:
             return
-        self.ensure_service(lambda: self._schedule_action(sid, "toggle"))
+        self.ensure_service(lambda: self._schedule_action(schedule_ids, "toggle"))
 
     def delete_selected(self):
-        sid = self._selected_schedule_id()
-        if sid is None:
+        schedule_ids = self._selected_schedule_ids()
+        if schedule_ids is None:
             return
-        if not messagebox.askyesno(APP_NAME, "Delete this saved task and its daily schedule?"):
+        count = len(schedule_ids)
+        noun = "task" if count == 1 else "tasks"
+        if not messagebox.askyesno(APP_NAME, f"Delete {count} saved {noun} and their daily schedules?"):
             return
-        self.ensure_service(lambda: self._schedule_action(sid, "delete"))
+        self.ensure_service(lambda: self._schedule_action(schedule_ids, "delete"))
 
-    def _schedule_action(self, sid: int, action: str):
-        try:
-            if action == "delete":
-                _api_request(f"/api/schedules/{sid}", method="DELETE", timeout=4)
-            else:
-                _api_request(f"/api/schedules/{sid}/{action}", method="POST", payload={}, timeout=6)
-            self.refresh_tasks()
-            self.status_var.set(f"Task #{sid}: {action} completed")
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:800]
-            messagebox.showerror(APP_NAME, f"Task action failed (HTTP {exc.code}):\n{detail}")
-        except Exception as exc:
-            messagebox.showerror(APP_NAME, f"Task action failed: {type(exc).__name__}")
+    def _schedule_action(self, schedule_ids: list[int], action: str):
+        completed: list[int] = []
+        failures: list[str] = []
+        for sid in schedule_ids:
+            try:
+                if action == "delete":
+                    _api_request(f"/api/schedules/{sid}", method="DELETE", timeout=4)
+                else:
+                    _api_request(f"/api/schedules/{sid}/{action}", method="POST", payload={}, timeout=6)
+                completed.append(sid)
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")[:300]
+                failures.append(f"#{sid}: HTTP {exc.code} {detail}".strip())
+            except Exception as exc:
+                failures.append(f"#{sid}: {type(exc).__name__}")
+        self.refresh_tasks()
+        if failures:
+            messagebox.showerror(
+                APP_NAME,
+                f"{action.title()} completed for {len(completed)} of {len(schedule_ids)} task(s).\n"
+                + "\n".join(failures),
+            )
+            self.status_var.set(f"{action.title()}: {len(completed)}/{len(schedule_ids)} tasks completed")
+        else:
+            self.status_var.set(f"{action.title()} completed for {len(completed)} task(s)")
 
     def _gemini_key_present(self) -> bool:
         try:
