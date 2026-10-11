@@ -17,6 +17,8 @@ def build_device_schedule_payloads(
     targets: list[str] = []
     seen: set[str] = set()
     for value in devices:
+        if value is None:
+            continue
         serial = str(value).strip()
         if serial and serial not in seen:
             targets.append(serial)
