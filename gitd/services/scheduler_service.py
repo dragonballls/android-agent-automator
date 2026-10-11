@@ -25,6 +25,7 @@ from gitd.services._job_helpers import (
     _enqueue_job,
     _parse_job_summary,
     archive_to_runs,
+    scheduled_job_log_path,
     finish_job,
 )
 
@@ -235,7 +236,7 @@ def _scheduler_tick():
                                 os.waitpid(pid, os.WNOHANG)
                             except (ChildProcessError, OSError):
                                 pass
-                            log_file = o.get("log_file") or f"/tmp/sched_job_{o['id']}.log"
+                            log_file = o.get("log_file") or scheduled_job_log_path(o["id"])
                             summary = _parse_job_summary(o["id"], log_path=log_file)
                             dur_str = f"{int(elapsed / 60)}m"
                             msg = f"T {dur_str}"
