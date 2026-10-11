@@ -20,7 +20,6 @@ import webbrowser
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
-from wireless_adb import pair_and_connect
 
 
 APP_NAME = "Ghost in the Droid"
@@ -299,7 +298,6 @@ class Launcher:
         ttk.Button(action_row, text="Refresh Connected Phones", command=self.refresh_devices).pack(side="left", padx=8)
         ttk.Button(action_row, text="Select All Phones", command=self.select_all_devices).pack(side="left", padx=6)
         ttk.Button(action_row, text="Clear Selection", command=self.clear_device_selection).pack(side="left", padx=6)
-        ttk.Button(action_row, text="Pair over Wi-Fi", command=self.open_wireless_pairing).pack(side="left", padx=6)
         ttk.Label(
             action_row,
             text="Selected phones run in parallel.",
@@ -527,126 +525,6 @@ class Launcher:
                 self._device_selection_initialized = True
         except Exception:
             pass
-
-    def open_wireless_pairing(self):
-        """Show the guided Android Wireless debugging pairing dialog."""
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Connect Android over Wi-Fi")
-        dialog.geometry("650x610")
-        dialog.minsize(620, 570)
-        dialog.transient(self.root)
-
-        frame = ttk.Frame(dialog, padding=16)
-        frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="WIRELESS ANDROID CONNECTION", font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        instructions = (
-            "Phone Link can stay connected for viewing and manual interaction. It does not expose the "
-            "general phone-control API this automation service needs, so this adds a separate wireless ADB "
-            "connection without requiring a USB cable.\n\n"
-            "1. On Android 11 or later, open Settings → About phone and tap Build number seven times if "
-            "Developer options are not enabled yet.\n"
-            "2. Open Settings → System → Developer options → Wireless debugging and turn it on. Keep the "
-            "phone and PC on the same trusted Wi-Fi network.\n"
-            "3. Tap Pair device with pairing code. Copy the phone IP address, pairing port, and temporary code "
-            "from that popup. The code is used once and is not saved.\n"
-            "4. On the main Wireless debugging screen, note its separate connection port. Enter both ports below."
-        )
-        ttk.Label(frame, text=instructions, justify="left", wraplength=590).pack(fill="x", pady=(8, 12))
-
-        form = ttk.Frame(frame)
-        form.pack(fill="x")
-        form.columnconfigure(1, weight=1)
-        ip_var = tk.StringVar()
-        pairing_port_var = tk.StringVar()
-        code_var = tk.StringVar()
-        connection_port_var = tk.StringVar()
-        fields = (
-            ("Phone IP address", ip_var, None),
-            ("Pairing port", pairing_port_var, None),
-            ("Temporary pairing code", code_var, "*"),
-            ("Wireless debugging port", connection_port_var, None),
-        )
-        for row, (label, variable, mask) in enumerate(fields):
-            ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", padx=(0, 12), pady=5)
-            entry = ttk.Entry(form, textvariable=variable, show=mask or "")
-            entry.grid(row=row, column=1, sticky="ew", pady=5)
-
-        ttk.Label(
-            frame,
-            text="Only the temporary ADB pairing code goes here—not your phone lock-screen PIN. "
-            "Use Wireless debugging only on networks you trust.",
-            wraplength=590,
-            justify="left",
-            foreground="#555555",
-        ).pack(fill="x", pady=(10, 8))
-
-        status_var = tk.StringVar(value="Waiting for phone details.")
-        ttk.Label(frame, textvariable=status_var, wraplength=590, justify="left").pack(fill="x", pady=(0, 10))
-
-        actions = ttk.Frame(frame)
-        actions.pack(fill="x", side="bottom")
-
-        def open_phone_link():
-            try:
-                if os.name == "nt":
-                    os.startfile("ms-phone:")
-                else:
-                    webbrowser.open("ms-phone:")
-            except Exception:
-                messagebox.showinfo(
-                    APP_NAME,
-                    "Open Phone Link from the Windows Start menu. It stays separate from the wireless ADB connection.",
-                    parent=dialog,
-                )
-
-        ttk.Button(actions, text="Open Phone Link", command=open_phone_link).pack(side="left")
-
-        def finish_pairing(message: str, error: str | None):
-            if not dialog.winfo_exists():
-                return
-            pair_button.configure(state="normal")
-            if error:
-                status_var.set(error)
-                messagebox.showerror(APP_NAME, error, parent=dialog)
-                return
-            status_var.set(message)
-            self.ensure_service(self.refresh_devices)
-            messagebox.showinfo(APP_NAME, message, parent=dialog)
-
-        def start_pairing():
-            host = ip_var.get().strip()
-            pairing_port = pairing_port_var.get().strip()
-            pairing_code = code_var.get().strip()
-            connection_port = connection_port_var.get().strip()
-            if not all((host, pairing_port, pairing_code, connection_port)):
-                messagebox.showwarning(
-                    APP_NAME,
-                    "Enter the IP address, pairing port, temporary pairing code, and Wireless debugging port.",
-                    parent=dialog,
-                )
-                return
-            code_var.set("")
-            pair_button.configure(state="disabled")
-            status_var.set("Pairing and connecting… The temporary code is being used only for this attempt.")
-            def worker():
-                try:
-                    message = pair_and_connect(host, pairing_port, pairing_code, connection_port)
-                    error = None
-                except Exception as exc:
-                    message = ""
-                    error = str(exc)
-                try:
-                    self.root.after(0, lambda message=message, error=error: finish_pairing(message, error))
-                except RuntimeError:
-                    pass
-
-            threading.Thread(target=worker, daemon=True, name="wireless-adb-pairing").start()
-
-        pair_button = ttk.Button(actions, text="Pair and Connect", command=start_pairing)
-        pair_button.pack(side="right", padx=(8, 0))
-        ttk.Button(actions, text="Close", command=dialog.destroy).pack(side="right")
-        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
-        dialog.grab_set()
 
     def _load_schedules(self) -> list[dict]:
         result = _api_request("/api/schedules", timeout=4)

@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: "3.10"
       - run: pip install -e ".[test]" httpx
-      - run: python -m pytest tests/api/test_smoke.py tests/test_agent_chat_gemini.py tests/test_device_unlock.py tests/test_scheduled_agent_task.py tests/test_tool_platforms.py tests/test_wireless_adb.py -v --tb=short
+      - run: python -m pytest tests/api/test_smoke.py tests/test_agent_chat_gemini.py tests/test_device_unlock.py tests/test_scheduled_agent_task.py tests/test_tool_platforms.py -v --tb=short
 
   ios-parity-tests:
     runs-on: ubuntu-latest
