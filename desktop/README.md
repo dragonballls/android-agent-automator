@@ -1,0 +1,26 @@
+# Windows Launcher
+
+The GitHub Actions workflow builds a single-file `GhostLauncher.exe` and publishes it as the artifact **GhostLauncher-Windows-x64**. The launcher bundles the dashboard and backend, so normal use does not require a separate Node.js or Python installation.
+
+## First run
+
+1. Download `GhostLauncher.exe` from the latest successful **Windows launcher EXE** workflow run.
+2. Start the EXE and press **Start / Check Service**.
+3. Click **Configure Gemini Key** and enter your Google AI Studio key; it is stored in the Windows OS credential vault, not a plaintext settings file.
+4. Connect your Android phone using ADB and approve the Android USB-debugging authorization prompt. Select the device serial in the launcher.
+5. Enter a task, provider/model, and daily time, then click **Save Daily Task**.
+6. Use **Run Now**, **Pause / Enable**, or **Delete** to control the task. The same saved schedules are available through the bundled Control Center.
+
+## Daily automation
+
+The local background service runs the scheduler and keeps saved tasks in the app database. Closing the visible launcher window leaves the service running. Enable **Start automation service when I sign in to Windows** to start the background service after you log into Windows again.
+
+The computer must be awake and signed in at the scheduled time, and the phone must remain connected. A task requiring biometric approval or an unsupported unlock flow can pause for manual help. A failed PIN attempt is not retried automatically.
+
+## Local files
+
+On Windows, user settings, the database, and logs are kept under:
+
+`%LOCALAPPDATA%\GhostInTheDroid`
+
+The Gemini key is stored in Windows Credential Manager. The launcher never asks you to put the phone PIN into a task prompt; if you enable the separate device-unlock capability, its enrollment prompt is hidden and its PIN is stored in the OS credential vault.
