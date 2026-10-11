@@ -6,6 +6,7 @@ import sys
 import pytest
 
 from gitd.services.scheduled_agent_task import build_execution_prompt, decode_payload
+from gitd.services.multi_device_tasks import build_device_schedule_payloads
 from gitd.services.job_engine import _build_scheduled_cmd, _skill_config_preflight
 
 
@@ -71,3 +72,26 @@ def test_saved_task_prompt_repeats_until_verified_completion_then_advances():
     assert "three consecutive cycles with no measurable progress" in prompt
     assert "Do not automate rewarded-ad viewing/clicking" in prompt
     assert "Repeat the safe setup steps until complete, then open the next page." in prompt
+
+def test_multi_device_schedules_create_one_identical_daily_task_per_phone():
+    payloads = build_device_schedule_payloads(
+        "Daily check",
+        "Open Settings and verify Wi-Fi, then report the result",
+        ["pixel-serial", "moto-serial", "pixel-serial"],
+        "gemini",
+        "gemini-3.8-flash",
+        "09:00",
+    )
+
+    assert [payload["phone_serial"] for payload in payloads] == ["pixel-serial", "moto-serial"]
+    assert all(payload["job_type"] == "agent_task" for payload in payloads)
+    assert all(payload["schedule_type"] == "daily" for payload in payloads)
+    assert all(payload["daily_times"] == ["09:00"] for payload in payloads)
+    assert all(payload["config_json"]["prompt"] == payloads[0]["config_json"]["prompt"] for payload in payloads)
+    assert all(payload["config_json"]["provider"] == "gemini" for payload in payloads)
+
+
+def test_multi_device_schedules_reject_empty_targets():
+    with pytest.raises(ValueError, match="at least one connected phone"):
+        build_device_schedule_payloads("Daily check", "Do work", [], "gemini", "model", "09:00")
+
