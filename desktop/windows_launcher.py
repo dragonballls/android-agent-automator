@@ -685,15 +685,17 @@ class Launcher:
             except Exception as exc:
                 failures.append(f"#{sid}: {type(exc).__name__}")
         self.refresh_tasks()
+        action_label = "Queued" if action == "run-now" else action.title()
         if failures:
             messagebox.showerror(
                 APP_NAME,
-                f"{action.title()} completed for {len(completed)} of {len(schedule_ids)} task(s).\n"
-                + "\n".join(failures),
+                f"{action_label} for {len(completed)} of {len(schedule_ids)} task(s).\n" + "\n".join(failures),
             )
-            self.status_var.set(f"{action.title()}: {len(completed)}/{len(schedule_ids)} tasks completed")
+            self.status_var.set(f"{action_label}: {len(completed)}/{len(schedule_ids)} tasks")
+        elif action == "run-now":
+            self.status_var.set(f"Queued {len(completed)} task(s); different phones can run in parallel")
         else:
-            self.status_var.set(f"{action.title()} completed for {len(completed)} task(s)")
+            self.status_var.set(f"{action_label} completed for {len(completed)} task(s)")
 
     def _gemini_key_present(self) -> bool:
         try:
